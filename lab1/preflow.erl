@@ -27,9 +27,9 @@
 % adj:		adjacency list of edge indices.
 
 -record(graph, { n, m, nodes, edges, node_actors, flows }).
-% 		n nodes and m edges stored in arrays. node_actors is also an
-%		array. flows is a mutable table indexed by edge number and
-%		containing the current flow counted from u to v.
+% 		n nodes and m edges stored in arrays. 
+% 		node_actors is also an array. 
+% 		flows is a mutable table indexed by edge number and containing the current flow counted from u to v.
 
 pr(Format, Args) -> 
 	case ?PRINT of
@@ -38,12 +38,12 @@ pr(Format, Args) ->
 	end.
 
 set_node_index(Nodes, N, N) -> Nodes;
-
 set_node_index(Nodes, I, N) ->
 	Node = array:get(I, Nodes),
 	Node1 = Node#node{i = I},
 	Nodes1 = array:set(I, Node1, Nodes),
 	set_node_index(Nodes1, I+1, N).
+
 
 mark_source_and_sink(Nodes, N) -> 
 	Source = array:get(0, Nodes),
@@ -51,12 +51,15 @@ mark_source_and_sink(Nodes, N) ->
 	Nodes1 = array:set(0, Source#node{h = N, source = true }, Nodes),
 	array:set(N-1, Sink#node{ sink = true }, Nodes1).
 
+
 make_nodes(N) -> 
 	Nodes = array:new(N, { default, #node{i = 0, h = 0, e = 0, adj = [], source = false, sink = false }}),
 	Nodes1 = mark_source_and_sink(Nodes,N),
 	set_node_index(Nodes1, 0, N).
 
+
 make_edges(M) -> array:new(M, { default, #edge{u = 0, v = 0, c = 0 }}).
+
 
 add_edge_to_node(Nodes, U, I) ->
 	U0 = array:get(U, Nodes),
@@ -64,9 +67,9 @@ add_edge_to_node(Nodes, U, I) ->
 	U1 = U0#node{adj = [I|Adj]},
 	array:set(U, U1, Nodes).
 
+
 % read u,v,c for each edge from stdin and put Nodes and Edges in a graph when we have read all M edges.
 read_edges(N, M, M, Nodes, Edges, T) -> #graph{n = N, m = M, nodes = Nodes, edges = Edges, flows = T};
-
 read_edges(N, I, M, N0, E0,T) ->
 	{ok,[U,V,C]} = io:fread("","~d ~d ~d"),
 	E1 = array:set(I, #edge{u = U, v = V, c = C }, E0),
@@ -75,9 +78,11 @@ read_edges(N, I, M, N0, E0,T) ->
 	ets:insert(T,{I,0}), % edge index I is a key and flow 0 is a value
 	read_edges(N, I+1, M, N2, E1,T).
 
+
 read_graph(N, M, Nodes, Edges) -> 
 	T = ets:new(flows,[public,ordered_set]),
 	read_edges(N, 0, M, Nodes, Edges, T).
+
 
 other(U, Edge) -> 
 	#edge{u = UU, v = VV } = Edge,
@@ -86,22 +91,27 @@ other(U, Edge) ->
 		VV -> UU
 	end.
 
+
 node(G, I) ->
 	#graph{nodes = Nodes } = G,
 	array:get(I, Nodes).
 
+
 edge(G, I) ->
 	#graph{edges = Edges } = G,
 	array:get(I, Edges).
+
 
 edge_capacity(G, I) ->
 	E = edge(G, I),
 	#edge{ c = C } = E,
 	C.
 
+
 node_actor(G, U) ->
 	#graph{node_actors = Node_actors } = G,
 	array:get(U, Node_actors).
+
 
 % how much can flow on edge I be increased by U?
 available_capacity(G, U, I) ->
@@ -120,6 +130,7 @@ available_capacity(G, U, I) ->
 	pr("=============== available capacity on ~p for ~p is ~p~n", [Edge, U, D]),
 
 	D.  
+
 
 print(G) ->
 	case ?PRINT of
@@ -140,6 +151,7 @@ edge_flow(G,I) ->
 	pr("I=~p f=~p~n", [I,F]),
 	F.
 
+
 update_flow(G, I, U, D ) ->
 	% U pushed D 
 	Edge = edge(G,I),
@@ -151,39 +163,16 @@ update_flow(G, I, U, D ) ->
 		UU -> ets:insert(Flows, {I,F+D});
 		VV -> ets:insert(Flows, {I,F-D})
 	end.
-	
-% discharge tries to push but never waits.
-discharge(Node, C, G, []) -> Node;
 
-discharge(Node, C, G, [I|Adj]) ->
-	
-	#node{i = U, e = E } = Node,
-
-	% do push here...
-
-	true = (E > 0).
-
-node_loop(Node, C, G) ->
-
-	pr("~s ~p: node = ~p~n", [?FUNCTION_NAME,?LINE,Node]),
-
-	receive 
-		{ C, hello } ->		pr("node ~p got hello~n", [Node]),
-						C ! { self(), hello },
-						node_loop(Node, C, G);
-
-		Fel		->		erlang:exit(?LINE)
-	end.
 
 start_node_actor(G, N, N) -> G;
-
 start_node_actor(G, I, N) ->
 	A = node_actor(G, I),
 	A ! { self(), start, G },
 	start_node_actor(G, I+1, N). 
 
-make_node_actor(G0, N, N) -> G0;
 
+make_node_actor(G0, N, N) -> G0;
 make_node_actor(G0, I, N) ->
 	#graph { node_actors = A0 } = G0,
 	Node = node(G0, I),
@@ -193,6 +182,7 @@ make_node_actor(G0, I, N) ->
 	G1 = G0#graph { node_actors = A1 },
 	make_node_actor(G1, I+1, N). 
 
+
 count_node_actors(N,N) -> N;
 count_node_actors(I,N) -> 
 	pr("so far got ~p hello~n", [I]),
@@ -201,6 +191,7 @@ count_node_actors(I,N) ->
 			pr("got hello from ~p~n", [Node]),
 			count_node_actors(I+1, N)
 	end.
+
 
 make_actors(G0) ->
 	#graph { n = N } = G0,
@@ -212,6 +203,66 @@ make_actors(G0) ->
 	print(G2),
 	G2.
 
+
+% discharge tries to push but never waits.
+discharge(Node, C, Graph, []) -> Node; % base case, no neighbors left to discharge to
+discharge(Node, C, Graph, [I|Adj]) ->
+	
+	#graph {edges = Edges} = Graph,
+	#node { e = Excess } = Node,
+	pr("EXCESS: ~p~n", [Excess]),
+	
+
+	Edge = array:get(I, Edges),
+	#edge { c = Capacity } = Edge,
+
+	% do push here...
+	Flow = edge_flow(Graph, I),
+
+	Delta = lists:min([Excess, Capacity - Flow]),
+
+	% if flow is positive
+	update_flow(Graph, I, Node, Delta),
+
+	discharge(Node, C, Graph, Adj)
+
+	.
+
+
+node_loop(Node, C, G) ->
+
+	pr("~s ~p: node = ~p~n", [?FUNCTION_NAME,?LINE,Node]),
+
+	#node {adj = Adj} = Node,
+
+	receive 
+		{ C, hello } ->		
+			pr("node ~p got hello~n", [Node]),
+			C ! { self(), hello },
+			node_loop(Node, C, G);
+ 
+		{ C, start, G } ->
+            pr("node ~p got start~n", [Node]),
+            node_loop(Node, C, G);
+		
+		{ C, push } -> 
+			pr("node ~p got push~n", [Node]),
+			discharge(Node, C, G, Adj),
+			node_loop(Node, C, G);
+
+		Fel ->		
+			erlang:exit(?LINE)
+	end.
+
+
+control_loop(G, Node, SE, T, TE) ->
+	receive
+        Msg ->
+            pr("controller got ~p~n", [Msg]),
+            control_loop(G, Node, SE, T, TE)
+    end.
+
+
 control(G0) ->
 	#graph { n = N } = G0,
 
@@ -220,12 +271,16 @@ control(G0) ->
 	S = node_actor(G1, 0),
 	T = node_actor(G1, N-1),
 
-	start_node_actor(G1, 0, N-1).
+	%start_node_actor(G1, 0, N-1),
+
+	% % tell S to do initial pushes then enter a control_loop and wait for messages
+	S ! { self(), push },
 
 	% decide when to print result and where to find it (either excess of sink or abs(excess of source))
 
 	% good idea to enter a control_loop waiting for messages...
-
+	% SE is the initial excess preflow of the source, 0 is the initial excess preflow of the sink
+	control_loop(G1, S, -10, T, 0). % PLACEHOLDER For tiny/0.ans the start is -10
 
 
 preflow() -> 
@@ -238,4 +293,6 @@ preflow() ->
 	G0 = read_graph(N, M, Nodes0, E0),
 	print(G0),
 
-	control(G0).
+	control(G0)
+	
+	.
