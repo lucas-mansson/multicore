@@ -203,63 +203,126 @@ make_actors(G0) ->
 	print(G2),
 	G2.
 
+handle_push(Node, C, G, From, EdgeIndex, Height, Amount) ->
+    #node{i = U, h = Height_org, e = Excess} = Node,
+	case Height_org < Height of
+		true -> update_flow(G, EdgeIndex, U, Amount),
+				NewExcess =  Excess + Amount,
+				NewNode =	Node#node{e = NewExcess},
+				From ! {self(), accept, EdgeIndex, Amount },
+				NewNode; % return the new node.
+				
+		false -> From ! {self(), reject, EdgeIndex},
+				Node
+	end.
+
+
+waitForResponse(Node, C, Graph, [I|Adj])->
+	    receive
+        {From, accept, I, Amount} ->
+            #node{e = Excess} = Node,
+			NewExcess = Excess - Amount,
+            NewNode = Node#node{e = NewExcess},
+            case NewExcess of
+        		0 ->
+        		    node_loop(NewNode, C, Graph);
+        		_ ->
+        		    discharge(NewNode, C, Graph, Adj)
+    		end;
+
+        {From, reject, I} ->
+            discharge(Node, C, Graph, Adj);
+
+        {From, push, EdgeIndex, Height, Amount} ->
+
+            NewNode = handle_push(Node, C, Graph,
+                                  From, EdgeIndex, Height, Amount),
+
+            waitForResponse(NewNode, C, Graph, [I|Adj]);
+
+        Other -> % should not happen.
+            waitForResponse(Node, C, Graph, [I|Adj])
+    end.
 
 % discharge tries to push but never waits.
-discharge(Node, C, Graph, []) -> Node; % base case, no neighbors left to discharge to
+discharge(Node, C, Graph, []) -> Node; % base case, no neighbors left to discharge to should be changed to increasing height.
 discharge(Node, C, Graph, [I|Adj]) ->
-	
-	#graph {edges = Edges} = Graph,
-	#node { e = Excess } = Node,
-	pr("EXCESS: ~p~n", [Excess]),
-	
+	C ! {self(), active},
+    #node{i = U, h = Height, e = Excess} = Node,
 
-	Edge = array:get(I, Edges),
-	#edge { c = Capacity } = Edge,
+    Capacity = available_capacity(Graph, U, I),
 
-	% do push here...
-	Flow = edge_flow(Graph, I),
+    Delta = lists:min([Excess, Capacity]),
 
-	Delta = lists:min([Excess, Capacity - Flow]),
+	V = other(U,edge(Graph, I) ),
 
-	% if flow is positive
-	update_flow(Graph, I, Node, Delta),
+    VActor = node_actor(Graph, V),
 
-	discharge(Node, C, Graph, Adj)
+	pr("U=~p V=~p I=~p VActor=~p~n",
+   	[U, V, I, VActor]),
+   	#graph{node_actors = Actors} = Graph,
+	pr("Actors = ~p~n", [array:to_list(Actors)]),
+    VActor ! {self(), push, I, Height, Delta},
 
-	.
+	waitForResponse(Node, C, Graph, [I|Adj]).
+    
+
 
 
 node_loop(Node, C, G) ->
 
 	pr("~s ~p: node = ~p~n", [?FUNCTION_NAME,?LINE,Node]),
 
-	#node {adj = Adj} = Node,
-
+	#node {adj = Adj, e = Excess} = Node,
+	C ! {self(), nonactive},
 	receive 
 		{ C, hello } ->		
 			pr("node ~p got hello~n", [Node]),
 			C ! { self(), hello },
 			node_loop(Node, C, G);
  
-		{ C, start, G } ->
-            pr("node ~p got start~n", [Node]),
-            node_loop(Node, C, G);
+		{ C, start, G2 } -> % mby dont need G2
+			discharge(Node, C, G2, Adj);
 		
 		{ C, push } -> 
 			pr("node ~p got push~n", [Node]),
-			discharge(Node, C, G, Adj),
-			node_loop(Node, C, G);
+			discharge(Node, C, G, Adj);
+		{From, push, EdgeIndex, Height, Amount} ->
+			NewNode = handle_push(Node, C, G, From, EdgeIndex, Height, Amount),
+			#node {adj = Adj, e = Excess} = NewNode,
+			case Excess > 0 of
+				true -> discharge(NewNode, C, G, Adj);
+				false -> node_loop(Node, C, G)
+			end;
+		{C, excess} -> C ! {Excess};
 
-		Fel ->		
-			erlang:exit(?LINE)
+		Other ->	
+			node_loop(Node, C, G)
 	end.
 
 
-control_loop(G, Node, SE, T, TE) ->
+control_loop(G, Node, SE, T, TE, Active_set) ->
+	pr("Active actors: ~p~n", [sets:to_list(Active_set)]),
+	pr("current flow ~p~n", [T]),
+	print(G),
 	receive
+		{From, active} ->
+			NewActiveSet = sets:add_element(From, Active_set),
+			control_loop(G, Node, SE, T, TE, NewActiveSet);
+
+		{From, nonactive} ->
+			NewActiveSet = sets:del_element(From, Active_set),
+			case sets:is_empty(NewActiveSet) of
+				true -> T ! {self(), excess},
+						receive
+							{Num} -> pr("flow : ~p~n", [Num]), Num
+						end;
+				false -> NewNewActiveSet = sets:del_element(dumsolution, NewActiveSet),
+					control_loop(G, Node, SE, T, TE, NewNewActiveSet)
+			end;
         Msg ->
             pr("controller got ~p~n", [Msg]),
-            control_loop(G, Node, SE, T, TE)
+            control_loop(G, Node, SE, T, TE, Active_set)
     end.
 
 
@@ -271,16 +334,15 @@ control(G0) ->
 	S = node_actor(G1, 0),
 	T = node_actor(G1, N-1),
 
-	%start_node_actor(G1, 0, N-1),
+	start_node_actor(G1, 0, N-1),
 
 	% % tell S to do initial pushes then enter a control_loop and wait for messages
-	S ! { self(), push },
-
+	S ! { self(), start, G1},
 	% decide when to print result and where to find it (either excess of sink or abs(excess of source))
 
 	% good idea to enter a control_loop waiting for messages...
 	% SE is the initial excess preflow of the source, 0 is the initial excess preflow of the sink
-	control_loop(G1, S, -10, T, 0). % PLACEHOLDER For tiny/0.ans the start is -10
+	control_loop(G1, S, -10, T, 0, sets:from_list([dumsolution])). 
 
 
 preflow() -> 
@@ -294,5 +356,5 @@ preflow() ->
 	print(G0),
 
 	control(G0)
-	
+
 	.
