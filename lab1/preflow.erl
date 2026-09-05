@@ -208,11 +208,13 @@ handle_push(Node, C, G, From, EdgeIndex, Height, Amount) ->
 	case Height_org < Height of
 		true -> update_flow(G, EdgeIndex, U, Amount),
 				NewExcess =  Excess + Amount,
+				io:format("it did acept the shit ~n"),
 				NewNode =	Node#node{e = NewExcess},
 				From ! {self(), accept, EdgeIndex, Amount },
 				NewNode; % return the new node.
 				
 		false -> From ! {self(), reject, EdgeIndex},
+				io:format("no accept ~n"),
 				Node
 	end.
 
@@ -245,10 +247,18 @@ waitForResponse(Node, C, Graph, [I|Adj])->
     end.
 
 % discharge tries to push but never waits.
-discharge(Node, C, Graph, []) -> Node; % base case, no neighbors left to discharge to should be changed to increasing height.
+discharge(Node, C, Graph, []) ->  % base case, no neighbors left to discharge to should be changed to increasing height.
+	NewNode =	Node#node{h = Node#node.h + 1}, % fyfan.
+    #node{adj = Adj} = NewNode,
+	io:format("increasing height ~n"),
+	discharge(NewNode, C, Graph, Adj);
+
+
 discharge(Node, C, Graph, [I|Adj]) ->
 	C ! {self(), active},
+	pr("bbb---------###### ~p~n", [Node]),
     #node{i = U, h = Height, e = Excess} = Node,
+	%-record(node, { i, h, e, adj, source, sink }).	
 
     Capacity = available_capacity(Graph, U, I),
 
@@ -307,10 +317,12 @@ control_loop(G, Node, SE, T, TE, Active_set) ->
 	print(G),
 	receive
 		{From, active} ->
+			pr("active: ~p~n", [From]),
 			NewActiveSet = sets:add_element(From, Active_set),
 			control_loop(G, Node, SE, T, TE, NewActiveSet);
 
 		{From, nonactive} ->
+			pr("not active: ~p~n", [From]),
 			NewActiveSet = sets:del_element(From, Active_set),
 			case sets:is_empty(NewActiveSet) of
 				true -> T ! {self(), excess},
