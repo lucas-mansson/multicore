@@ -205,17 +205,17 @@ make_actors(G0) ->
 
 handle_push(Node, C, G, From, EdgeIndex, Height, Amount) ->
     #node{i = U, h = Height_org, e = Excess} = Node,
-	case Height_org < Height of
+	case Height_org < Height of 
 		true -> update_flow(G, EdgeIndex, U, Amount),
 				NewExcess =  Excess + Amount,
 				pr("it did acept the shit ~p~p~p~n", [NewExcess, Amount, Excess]),
-				io:format("here1"),
 				NewNode =	Node#node{e = NewExcess},
 				From ! {self(), accept, EdgeIndex, Amount },
 				NewNode; % return the new node.
 				
 		false -> From ! {self(), reject, EdgeIndex},
-				io:format("no accept ~n"),
+				%io:format("no accept "),
+				pr("org h = ~p, h = ~p ~n", [Height_org, Height]),
 				Node
 	end.
 
@@ -236,10 +236,10 @@ waitForResponse(Node, C, Graph, [I|Adj])->
         {From, reject, I} ->
             discharge(Node, C, Graph, Adj);
 
-        {From, push, EdgeIndex, Height, Amount} ->
+        {From, push, EdgeIndex, HeightFrom, Amount} ->
 
             NewNode = handle_push(Node, C, Graph,
-                                  From, EdgeIndex, Height, Amount),
+                                  From, EdgeIndex, HeightFrom, Amount),
 
             waitForResponse(NewNode, C, Graph, [I|Adj]);
 
@@ -250,6 +250,7 @@ waitForResponse(Node, C, Graph, [I|Adj])->
 % discharge tries to push but never waits.
 discharge(Node, C, Graph, []) ->  % base case, no neighbors left to discharge to should be changed to increasing height.
 	C ! {self(), active},
+
 	NewNode =	Node#node{h = Node#node.h + 1}, % fyfan.
     #node{adj = Adj} = NewNode,
 	io:format("increasing height ~n"),
@@ -277,36 +278,67 @@ discharge(Node, C, Graph, [I|Adj]) ->
     VActor ! {self(), push, I, Height, Delta},
 
 	waitForResponse(Node, C, Graph, [I|Adj]).
-    
+start(Node, C, Graph, []) -> 
+	node_loop(Node, C, Graph);
+start(Node, C, Graph, [I|Adj]) ->
+	pr("should be active, thread: ~p ~n", [ self()]),
+	C ! {self(), hello},
+    #node{i = U, h = Height} = Node,
+	%-record(node, { i, h, e, adj, source, sink }).	
+	pr("source height:         ~p~n",[Height]),
+    Capacity = available_capacity(Graph, U, I),
 
+	V = other(U,edge(Graph, I) ),
+
+    VActor = node_actor(Graph, V),
+
+	pr("U=~p V=~p I=~p VActor=~p~n",
+   	[U, V, I, VActor]),
+    VActor ! {self(), push, I, Height, Capacity},
+	receive
+        {VActor, accept, I, Amount} -> pr("~n",[]);
+        {VActor, reject, I} -> pr("bad stuff, source got a reject ~n",[])
+	end,
+	start(Node, C, Graph, Adj).
 
 
 node_loop(Node, C, G) ->
 
-	pr("~s ~p: node = ~p~n", [?FUNCTION_NAME,?LINE,Node]),
+	%pr("~s ~p: node = ~p~n", [?FUNCTION_NAME,?LINE,Node]),
 
 	#node {adj = Adj, e = Excess} = Node,
-	C ! {self(), nonactive},
+	%-record(node, { i, h, e, adj, source, sink }).	
+	C ! {self(), nonact},
+	pr("thread: ~p, nonact ~n", [self()]),
 	receive 
 		{ C, hello } ->		
 			pr("node ~p got hello~n", [Node]),
 			C ! { self(), hello },
 			node_loop(Node, C, G);
  
-		{ C, start, G2 } -> % mby dont need G2
-			discharge(Node, C, G2, Adj);
+		{ C, start, G2 } -> % updates graph.
+			pr("node ~p got start, thread: ~p ~n ", [Node, self()]),
+			node_loop(Node, C, G2);
 		
-		{ C, push } -> 
-			pr("node ~p got push~n", [Node]),
-			discharge(Node, C, G, Adj);
+		{ C, forcepush} ->
+			pr("node ~p got forcepush, thread: ~p ~n ", [Node, self()]),
+			start(Node, C, G , Adj);
+
 		{From, push, EdgeIndex, Height, Amount} ->
+			pr("node ~p got pushreq, thread: ~p from: ~p ~n ", [Node, self(), From]),
 			NewNode = handle_push(Node, C, G, From, EdgeIndex, Height, Amount),
-			#node {adj = Adj, e = Excess} = NewNode,
-			case Excess > 0 of
-				true -> discharge(NewNode, C, G, Adj);
-				false -> node_loop(Node, C, G)
+			#node {adj = Adj2, e = Excess2, sink = IsSink} = NewNode,
+			%-record(node, { i, h, e, adj, source, sink }).	
+			pr("new Execess of ~p ~n", [Excess2]),
+			case {Excess2 > 0, IsSink } of
+				{true, false} -> 
+					pr("here ~n", []),
+					discharge(NewNode, C, G, Adj2);
+				_ -> node_loop(Node, C, G)
 			end;
-		{C, excess} -> C ! {Excess};
+		{C, excess} -> 
+			pr("node ~p got excess request, thread: ~p ~n ", [Node, self()]),
+			C ! {Excess};
 
 		Other ->	
 			node_loop(Node, C, G)
@@ -317,11 +349,11 @@ control_loop(G, Node, SE, T, TE, Active_set) ->
 	pr("Active actors: ~p~n", [sets:to_list(Active_set)]),
 	receive
 		{From, active} ->
-			pr("active: ~p~n", [From]),
+			pr("activeb: ~p~n", [From]),
 			NewActiveSet = sets:add_element(From, Active_set),
 			control_loop(G, Node, SE, T, TE, NewActiveSet);
 
-		{From, nonactive} ->
+		{From, nonact} ->
 			pr("not active: ~p~n", [From]),
 			NewActiveSet = sets:del_element(From, Active_set),
 			case sets:is_empty(NewActiveSet) of
@@ -349,7 +381,8 @@ control(G0) ->
 	start_node_actor(G1, 0, N-1),
 
 	% % tell S to do initial pushes then enter a control_loop and wait for messages
-	S ! { self(), start, G1},
+	pr("############################################################################################################################################################################ ~n", []),
+	S ! { self(), forcepush},
 	% decide when to print result and where to find it (either excess of sink or abs(excess of source))
 
 	% good idea to enter a control_loop waiting for messages...
