@@ -208,7 +208,7 @@ handle_push(Node, C, G, From, EdgeIndex, Height, Amount) ->
 	case Height_org < Height of
 		true -> update_flow(G, EdgeIndex, U, Amount),
 				NewExcess =  Excess + Amount,
-				pr("it did acept the shit ~p~n", [NewExcess, Amount, Excess]),
+				pr("it did acept the shit ~p~p~p~n", [NewExcess, Amount, Excess]),
 				io:format("here1"),
 				NewNode =	Node#node{e = NewExcess},
 				From ! {self(), accept, EdgeIndex, Amount },
@@ -265,7 +265,7 @@ discharge(Node, C, Graph, [I|Adj]) ->
     Capacity = available_capacity(Graph, U, I),
 
     Delta = lists:min([Excess, Capacity]),
-
+	pr("re ~p~p~p~n", [Delta, Capacity, Excess]),
 	V = other(U,edge(Graph, I) ),
 
     VActor = node_actor(Graph, V),
