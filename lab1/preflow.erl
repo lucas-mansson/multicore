@@ -208,7 +208,8 @@ handle_push(Node, C, G, From, EdgeIndex, Height, Amount) ->
 	case Height_org < Height of
 		true -> update_flow(G, EdgeIndex, U, Amount),
 				NewExcess =  Excess + Amount,
-				io:format("it did acept the shit ~n"),
+				pr("it did acept the shit ~p~n", [NewExcess, Amount, Excess]),
+				io:format("here1"),
 				NewNode =	Node#node{e = NewExcess},
 				From ! {self(), accept, EdgeIndex, Amount },
 				NewNode; % return the new node.
@@ -248,6 +249,7 @@ waitForResponse(Node, C, Graph, [I|Adj])->
 
 % discharge tries to push but never waits.
 discharge(Node, C, Graph, []) ->  % base case, no neighbors left to discharge to should be changed to increasing height.
+	C ! {self(), active},
 	NewNode =	Node#node{h = Node#node.h + 1}, % fyfan.
     #node{adj = Adj} = NewNode,
 	io:format("increasing height ~n"),
@@ -313,8 +315,6 @@ node_loop(Node, C, G) ->
 
 control_loop(G, Node, SE, T, TE, Active_set) ->
 	pr("Active actors: ~p~n", [sets:to_list(Active_set)]),
-	pr("current flow ~p~n", [T]),
-	print(G),
 	receive
 		{From, active} ->
 			pr("active: ~p~n", [From]),
