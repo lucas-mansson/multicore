@@ -448,7 +448,7 @@ control(G0) ->
 
 	% good idea to enter a control_loop waiting for messages...
 	% SE is the initial excess preflow of the source, 0 is the initial excess preflow of the sink
-	control_loop(G1, S, 1000002, T, 0, sets:from_list([S])). 
+	control_loop(G1, S, T, 0, sets:from_list([S])). 
 
 
 preflow() -> 
