@@ -250,6 +250,7 @@ wait_for_response(Node, C, Graph, [I|Adj])->
         		_ -> % if we have excess left, try to push everything
 					pr("Excess: ~p left for node: ~p, activating ~n", [NewExcess, NodeIndex]),
 					C ! { self(), active },
+
         		    discharge(NewNode, C, Graph, Adj)
     		end;
 
@@ -288,7 +289,7 @@ discharge(Node, C, Graph, [I|Adj]) ->
 
     Capacity = available_capacity(Graph, U, I),
 
-	pr("Discharging node: ~p with Excess ~p ~n", [NodeIndex, Excess]),
+	pr("Discharging node ~p with Excess ~p ~n", [NodeIndex, Excess]),
 	case Capacity == 0 of
 		true -> 
 			discharge(Node, C, Graph, Adj);
@@ -368,24 +369,24 @@ node_loop(Node, C, G) ->
 
 		{ From, push, EdgeIndex, Height, Amount } ->
 			pr("node ~p got push request from: ~p of flow: ~p ~n ", [I, From, Amount]),
-			% The node that received the message is responsible for updating
-			NewNode = handle_push_request(Node, C, G, From, EdgeIndex, Height, Amount),
-			#node {i = I, adj = Adj2, e = Excess2, sink = IsSink} = NewNode,
 
-			%-record(node, { i, h, e, adj, source, sink }).	
-			
-			pr("New Excess of ~p for node ~p ~n", [Excess2, I]),
+			% The node that received the message is responsible for updating edge
+			NewNode = handle_push_request(Node, C, G, From, EdgeIndex, Height, Amount),
+
+			#node {i = I, adj = Adj2, e = Excess2, sink = IsSink} = NewNode,			
+			%pr("New Excess of ~p for node ~p ~n", [Excess2, I]),
 			
 			case {Excess2 > 0, IsSink } of
 				{true, false} -> 
 					discharge(NewNode, C, G, Adj2);
+				{true, true} ->
+					pr("Sink node activating with excess ~p~n", [Excess2]),
+					C ! { self(), active };
+				{false, true0} ->
+					true = false; % should not happen
 				_ -> 
 					node_loop(Node, C, G)
 			end;
-
-		{C, excess} -> 
-			%pr("node ~p got excess request, thread: ~p ~n ", [Node, self()]),
-			C ! {Excess};
 
 		Other ->	
 			node_loop(Node, C, G)
