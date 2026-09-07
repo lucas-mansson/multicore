@@ -407,7 +407,7 @@ control_loop(G, S, T, TE, Active_set) ->
 					NewActiveSet = sets:add_element(From, Active_set),
 					control_loop(G, S, T, TE, NewActiveSet);
 
-				{From, active, Excess} ->
+				{From, active, Excess} -> % this message is only sent from the sink when its activated and used to q
 					pr("GOT EXCESS FROM SINK: ~p~n", [Excess]),
 					NewActiveSet = sets:add_element(From, Active_set),
 					control_loop(G, S, T, Excess, NewActiveSet)
@@ -467,5 +467,7 @@ preflow() ->
 	Result = control(G0),
 
 	pr("##################### ALGORITHM FINISH ################~n", []),
-	pr("RESULT: ~p~n", [Result])
+	pr("RESULT: ~p~n", [Result]),
+	pr("f = ~p~n", [Result]),
+	io:format("f = ~p~n", [Result])
 	.
