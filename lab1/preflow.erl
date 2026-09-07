@@ -393,7 +393,7 @@ node_loop(Node, C, G) ->
 	end.
 
 
-control_loop(G, S, SE, T, TE, Active_set) ->
+control_loop(G, S, T, TE, Active_set) ->
 
 	Goal_list = lists:sort([S,T]),
 	Active_list = lists:sort(sets:to_list(Active_set)),
@@ -407,7 +407,7 @@ control_loop(G, S, SE, T, TE, Active_set) ->
 				{From, active} ->
 					pr("Setting active: ~p~n", [From]),
 					NewActiveSet = sets:add_element(From, Active_set),
-					control_loop(G, S, SE, T, TE, NewActiveSet);
+					control_loop(G, S, T, TE, NewActiveSet);
 
 				{From, nonact} ->
 					pr("Setting not active: ~p~n", [From]),
@@ -420,12 +420,12 @@ control_loop(G, S, SE, T, TE, Active_set) ->
 										Num
 								end;
 						false -> NewNewActiveSet = sets:del_element(dumsolution, NewActiveSet),
-							control_loop(G, S, SE, T, TE, NewNewActiveSet)
+							control_loop(G, S, T, TE, NewNewActiveSet)
 					end;
 				
 				Msg ->
 					pr("controller got ~p~n", [Msg]),
-					control_loop(G, S, SE, T, TE, Active_set)
+					control_loop(G, S, T, TE, Active_set)
 			end
 	end.
 
