@@ -461,6 +461,8 @@ preflow() ->
 	G0 = read_graph(N, M, Nodes0, E0),
 	print(G0),
 
-	control(G0)
+	Result = control(G0),
 
+	pr("##################### ALGORITHM FINISH ################~n", []),
+	pr("RESULT: ~p~n", [Result])
 	.
