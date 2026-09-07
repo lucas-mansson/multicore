@@ -381,9 +381,7 @@ node_loop(Node, C, G) ->
 					discharge(NewNode, C, G, Adj2);
 				{true, true} ->
 					pr("Sink node activating with excess ~p~n", [Excess2]),
-					C ! { self(), active };
-				{false, true0} ->
-					true = false; % should not happen
+					C ! { self(), active, Excess2 };
 				_ -> 
 					node_loop(Node, C, G)
 			end;
@@ -401,7 +399,7 @@ control_loop(G, S, T, TE, Active_set) ->
 
 	case Goal_list =:= Active_list of
 		true ->
-			S;
+			TE;
 		false ->
 			receive
 				{From, active} ->
@@ -409,6 +407,11 @@ control_loop(G, S, T, TE, Active_set) ->
 					NewActiveSet = sets:add_element(From, Active_set),
 					control_loop(G, S, T, TE, NewActiveSet);
 
+				{From, active, Excess} ->
+					pr("GOT EXCESS FROM SINK: ~p~n", [Excess]),
+					NewActiveSet = sets:add_element(From, Active_set),
+					control_loop(G, S, T, Excess, NewActiveSet)
+					;
 				{From, nonact} ->
 					pr("Setting not active: ~p~n", [From]),
 					NewActiveSet = sets:del_element(From, Active_set),
