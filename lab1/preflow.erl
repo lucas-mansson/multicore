@@ -188,27 +188,14 @@ make_node_actor(G0, I, N) ->
 	Node = node(G0, I),
 	Actor = spawn(preflow, node_loop, [Node, self(), G0]),
 	A1 = array:set(I, Actor, A0),
-	Actor ! { self(), hello },
 	G1 = G0#graph { node_actors = A1 },
 	make_node_actor(G1, I+1, N). 
-
-
-count_node_actors(N,N) -> N;
-count_node_actors(I,N) -> 
-	%pr("so far got ~p hello~n", [I]),
-	receive 
-		{ Node, hello } -> 
-			%pr("got hello from ~p~n", [Node]),
-			count_node_actors(I+1, N)
-	end.
-
 
 make_actors(G0) ->
 	#graph { n = N } = G0,
 	Node_actors = array:new(N),
 	G1 = G0#graph { node_actors = Node_actors },
 	G2 = make_node_actor(G1, 0, N),
-	count_node_actors(0, N),
 	%pr("all nodes said hello~n", []),
 	print(G2),
 	G2.
@@ -354,11 +341,6 @@ node_loop(Node, C, G) ->
 	%-record(node, { i, h, e, adj, source, sink }).	
 
 	receive 
-		{ C, hello } ->		
-			pr("node ~p got hello~n", [Node]),
-			C ! { self(), hello },
-			node_loop(Node, C, G);
- 
 		{ C, start, G2 } -> % updates graph.
 			pr("node ~p got start, thread: ~p ~n ", [Node, self()]),
 			node_loop(Node, C, G2);
@@ -468,6 +450,5 @@ preflow() ->
 
 	pr("##################### ALGORITHM FINISH ################~n", []),
 	pr("RESULT: ~p~n", [Result]),
-	pr("f = ~p~n", [Result]),
 	io:format("f = ~p~n", [Result])
 	.
