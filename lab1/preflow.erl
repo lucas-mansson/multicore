@@ -2,7 +2,7 @@
 -export([preflow/0, node_loop/3]).
 
 % set to 1 for debugging output
--define(PRINT, 1).
+-define(PRINT, 0).
 
 % preflow-push for undirected graph using actors.
 %
