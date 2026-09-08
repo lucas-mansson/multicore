@@ -222,7 +222,7 @@ handle_push_request(ReceiverNode, C, G, FromActor, EdgeIndex, Height, Amount) ->
 
 
 wait_for_response(Node, C, Graph, [I|Adj])->
-
+	pr("here#####", []),
 	receive 
 		% receiver accepted push with amount
         {From, accept, I, Amount} ->
@@ -366,7 +366,8 @@ node_loop(Node, C, G) ->
 					discharge(NewNode, C, G, Adj2);
 				{true, true, _} ->
 					pr("Sink node activating with excess ~p~n", [Excess2]),
-					C ! { self(), active, Excess2 };
+					C ! { self(), active, Excess2 },
+					node_loop(NewNode, C, G);
 				_ -> 
 					node_loop(Node, C, G)
 			end;
