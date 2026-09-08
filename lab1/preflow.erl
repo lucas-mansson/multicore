@@ -467,7 +467,6 @@ preflow() ->
 	Result = control(G0),
 
 	pr("##################### ALGORITHM FINISH ################~n", []),
-	pr("RESULT: ~p~n", [Result]),
-	pr("f = ~p~n", [Result]),
+
 	io:format("f = ~p~n", [Result])
 	.
