@@ -232,7 +232,8 @@ wait_for_response(Node, C, Graph, [I|Adj])->
             case NewExcess of 
         		0 -> % if we now have no excess, go back to listening for messages
 					pr("No excess left for node: ~p, inactivating~n", [NodeIndex]),
-					C ! { self(), nonact },
+					C ! { self(), nonact},
+					pr("poo ~n", []),
         		    node_loop(NewNode, C, Graph);
         		_ -> % if we have excess left, try to push everything
 					pr("Excess: ~p left for node: ~p, activating ~n", [NewExcess, NodeIndex]),
@@ -299,6 +300,7 @@ discharge(Node, C, Graph, [I|Adj]) ->
 
 % Initial push
 start_push(Node, C, Graph, []) -> 
+	C ! {self(), nonact},
 	node_loop(Node, C, Graph);
 start_push(Node, C, Graph, [I|Adj]) ->
 	pr("should be active, thread: ~p ~n", [ self()]),
@@ -355,13 +357,14 @@ node_loop(Node, C, G) ->
 			% The node that received the message is responsible for updating edge
 			NewNode = handle_push_request(Node, C, G, From, EdgeIndex, Height, Amount),
 
-			#node {i = I, adj = Adj2, e = Excess2, sink = IsSink} = NewNode,			
+			#node {i = I, adj = Adj2, e = Excess2, sink = IsSink, source = IsSource} = NewNode,			
 			%pr("New Excess of ~p for node ~p ~n", [Excess2, I]),
 			
-			case {Excess2 > 0, IsSink } of
-				{true, false} -> 
+			case {Excess2 > 0, IsSink, IsSource } of
+				{true, false, false} -> 
+					C ! {self(), active},
 					discharge(NewNode, C, G, Adj2);
-				{true, true} ->
+				{true, true, _} ->
 					pr("Sink node activating with excess ~p~n", [Excess2]),
 					C ! { self(), active, Excess2 };
 				_ -> 
@@ -375,7 +378,7 @@ node_loop(Node, C, G) ->
 
 control_loop(G, S, T, TE, Active_set) ->
 
-	Goal_list = lists:sort([S,T]),
+	Goal_list = lists:sort([T]),
 	Active_list = lists:sort(sets:to_list(Active_set)),
 	pr("Active actors: ~p~n", [Active_list]),
 
@@ -397,16 +400,7 @@ control_loop(G, S, T, TE, Active_set) ->
 				{From, nonact} ->
 					pr("Setting not active: ~p~n", [From]),
 					NewActiveSet = sets:del_element(From, Active_set),
-					case sets:is_empty(NewActiveSet) of
-						true -> T ! {self(), excess},
-								receive
-									{Num} -> 
-										%pr("flow : ~p~n", [Num]), 
-										Num
-								end;
-						false -> NewNewActiveSet = sets:del_element(dumsolution, NewActiveSet),
-							control_loop(G, S, T, TE, NewNewActiveSet)
-					end;
+					control_loop(G, S, T, TE, NewActiveSet);
 				
 				Msg ->
 					pr("controller got ~p~n", [Msg]),
