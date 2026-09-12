@@ -1,8 +1,9 @@
 #DATA = ../../data/railwayplanning/secret/3large.in
-DATA = ../../data/tiny/0.in
+DATA = ../../data/railwayplanning/secret/4huge.in
+#DATA = ../../data/tiny/0.in
 
 main:
-	gcc -o preflow preflow.c -g -O3 -pthread
+	gcc -o preflow preflow.c -O3 -pthread
 	time sh check-solution.sh ./preflow
 	@echo PASS all tests
 
