@@ -35,7 +35,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define PRINT 1 /* enable/disable prints. */
+#define PRINT 0
 #if PRINT
 #define pr(...)                                                                \
   do {                                                                         \
@@ -491,7 +491,7 @@ int preflow(graph_t *graph) {
   /* u is any node with excess preflow. */
 
   struct work_args_t thread_arg = {graph};
-  int nbr_threads = 1;
+  int nbr_threads = 2;
   pthread_t thread[nbr_threads];
   for (int i = 0; i < nbr_threads; i++) {
     if (pthread_create(&thread[i], NULL, work, &thread_arg) != 0) {
