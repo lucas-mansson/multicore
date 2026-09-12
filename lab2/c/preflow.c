@@ -36,7 +36,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define PRINT 0
+#define PRINT 1
 #if PRINT
 #define pr(...)                                                                \
   do {                                                                         \
@@ -74,6 +74,7 @@ struct node_t {
   int excess;   /* excess flow.			*/
   list_t *adj;  /* adjacency list.		*/
   node_t *next; /* with excess preflow.		*/
+  pthread_mutex_t node_mutex;
 };
 
 struct edge_t {
@@ -81,6 +82,7 @@ struct edge_t {
   node_t *node_2; /* the other. 			*/
   int flow;       /* flow > 0 if from u to v.	*/
   int capacity;   /* capacity.			*/
+  pthread_mutex_t edge_mutex;
 };
 
 struct graph_t {
@@ -119,8 +121,6 @@ struct graph_t {
 
 static char *progname;
 
-#if PRINT
-
 static int id(graph_t *g, node_t *v) {
   /* return the node index for v.
    *
@@ -144,7 +144,25 @@ static int id(graph_t *g, node_t *v) {
 
   return v - g->nodes;
 }
-#endif
+
+void lock_node(graph_t *g, node_t *u) {
+  pthread_mutex_lock(&u->node_mutex);
+  pr("locking node %d mutex \n", id(g, u));
+}
+
+void unlock_node(graph_t *g, node_t *u) {
+  pr("unlocking node %d mutex \n", id(g, u));
+  pthread_mutex_unlock(&u->node_mutex);
+}
+
+void lock_excess_list(graph_t *g) {
+  pthread_mutex_lock(&g->excess_nodes_mutex);
+  pr("locking excess_nodes_mutex \n");
+}
+void unlock_excess_list(graph_t *g) {
+  pr("unlocking excess_nodes_mutex \n");
+  pthread_mutex_unlock(&g->excess_nodes_mutex);
+}
 
 void error(const char *fmt, ...) {
   /* print error message and exit.
@@ -307,6 +325,7 @@ static graph_t *new_graph(FILE *in, int n, int m) {
   g->source = &g->nodes[0];
   g->sink = &g->nodes[n - 1];
   g->excess_nodes = NULL;
+  pthread_mutex_init(&g->excess_nodes_mutex, NULL);
 
   for (i = 0; i < m; i += 1) {
     a = next_int();
@@ -315,6 +334,17 @@ static graph_t *new_graph(FILE *in, int n, int m) {
     u = &g->nodes[a];
     v = &g->nodes[b];
     connect(u, v, c, g->edges + i);
+  }
+
+  // init nodes mutexes
+  for (int i = 0; i < n; i++) {
+    pthread_mutex_init(&g->nodes[i].node_mutex, NULL);
+    pr("initializing mutex for node %d\n", id(g, &g->nodes[i]));
+  }
+  // init edge mutexes
+  for (int i = 0; i < m; i++) {
+    pthread_mutex_init(&g->edges[i].edge_mutex, NULL);
+    pr("initializing mutex for edge %d\n", i);
   }
 
   return g;
@@ -335,7 +365,7 @@ static void add_to_excess_list(graph_t *g, node_t *v) {
   }
 }
 
-static node_t *get_node_with_excess(graph_t *g) {
+static node_t *get_from_excess_list(graph_t *g) {
   node_t *v;
 
   /* take any node from the set of nodes with excess preflow
@@ -370,25 +400,19 @@ static void push(graph_t *graph, node_t *from, node_t *to, edge_t *edge) {
   to->excess += remaining_capacity;
 
   /* the following are always true. */
-
   assert(remaining_capacity >= 0);
   assert(from->excess >= 0);
   assert(abs(edge->flow) <= edge->capacity);
 
   if (from->excess > 0) {
-
     /* still some remaining so let u push more. */
-
     add_to_excess_list(graph, from);
   }
 
   if (to->excess == remaining_capacity) {
-
     /* since v has d excess now it had zero before and
      * can now push.
-     *
      */
-
     add_to_excess_list(graph, to);
   }
 }
@@ -421,7 +445,6 @@ void *work(void *arg) {
   int flow_direction;
   graph_t *graph;
 
-  // u = args->node;
   graph = args->graph;
 
   /* if we can push we must push and only if we could
@@ -432,11 +455,7 @@ void *work(void *arg) {
    */
 
   while (1) {
-    pthread_mutex_lock(&graph->excess_nodes_mutex);
-    pr("locking excess_nodes_mutex \n");
-    u = get_node_with_excess(graph);
-    pr("unlocking excess_nodes_mutex \n");
-    pthread_mutex_unlock(&graph->excess_nodes_mutex);
+    u = get_from_excess_list(graph);
 
     if (u == NULL) {
       return NULL;
@@ -464,7 +483,16 @@ void *work(void *arg) {
     }
 
     if (v != NULL) {
+      // always lock node with lower index first
+      node_t *first = u;
+      node_t *second = v;
+      if (id(graph, u) > id(graph, v)) {
+        first = v;
+        first = u;
+      }
+
       push(graph, u, v, edge);
+
     } else {
       relabel(graph, u);
     }
@@ -485,8 +513,6 @@ int preflow(graph_t *graph) {
   source->height = graph->nbr_nodes;
 
   p = source->adj;
-
-  pthread_mutex_init(&graph->excess_nodes_mutex, NULL);
 
   /* start by pushing as much as possible (limited by
    * the edge capacity) from the source to its neighbors.
