@@ -76,6 +76,17 @@ void unlock_node(graph_t *g, node_t *u) {
   pthread_mutex_unlock(&u->node_mutex);
 }
 
+void lock_nodes(graph_t *g, node_t *u, node_t *v) {
+  node_t *first = u;
+  node_t *second = v;
+  if (id(g, u) > id(g, v)) {
+    first = v;
+    second = u;
+  }
+  lock_node(g, first);
+  lock_node(g, second);
+}
+
 void lock_excess_list(graph_t *g) {
   pthread_mutex_lock(&g->excess_nodes_mutex);
   pr("locking excess_nodes_mutex \n");
@@ -370,43 +381,28 @@ void *work(void *arg) {
         flow_direction = -1;
       }
 
-      node_t *first = u;
-      node_t *second = v;
-      if (id(graph, u) > id(graph, v)) {
-        first = v;
-        second = u;
-      }
-      lock_node(graph, first);
-      lock_node(graph, second);
+      lock_nodes(graph, u, v);
       int should_break = 0;
       if (u->height > v->height && flow_direction * edge->flow < edge->capacity)
         should_break = 1;
-      else
-        v = NULL;
-      unlock_node(graph, first);
-      unlock_node(graph, second);
+
+      unlock_node(graph, u);
+      unlock_node(graph, v);
+
       if (should_break) {
         break;
       }
+      v = NULL;
     }
 
     if (v != NULL) {
-      // always lock node with lower index first to avoid deadlock
-      node_t *first = u;
-      node_t *second = v;
-      if (id(graph, u) > id(graph, v)) {
-        first = v;
-        second = u;
-      }
-
-      lock_node(graph, first);
-      lock_node(graph, second);
+      lock_nodes(graph, u, v);
       lock_excess_list(graph);
 
       push(graph, u, v, edge);
 
-      unlock_node(graph, first);
-      unlock_node(graph, second);
+      unlock_node(graph, u);
+      unlock_node(graph, v);
       unlock_excess_list(graph);
 
     } else {
