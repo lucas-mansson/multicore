@@ -406,7 +406,6 @@ static node_t *other(node_t *u, edge_t *e) {
 
 struct work_args_t {
   graph_t *graph;
-  // node_t *node;
 };
 void *work(void *arg) {
   struct work_args_t *args = arg;
@@ -490,12 +489,21 @@ int preflow(graph_t *graph) {
 
   /* then loop until only s and/or t have excess preflow. */
   /* u is any node with excess preflow. */
-  pthread_t thread;
 
-  struct work_args_t arg = {graph};
+  struct work_args_t thread_arg = {graph};
+  int nbr_threads = 1;
+  pthread_t thread[nbr_threads];
+  for (int i = 0; i < nbr_threads; i++) {
+    if (pthread_create(&thread[i], NULL, work, &thread_arg) != 0) {
+      error("pthread create failed");
+    }
+  }
 
-  pthread_create(&thread, NULL, work, &arg);
-  pthread_join(thread, NULL);
+  for (int i = 0; i < nbr_threads; i++) {
+    if (pthread_join(thread[i], NULL) != 0) {
+      error("pthread join failed");
+    }
+  }
 
   return graph->sink->excess;
 }
