@@ -29,21 +29,13 @@
 
 #include <assert.h>
 #include <ctype.h>
+#include <pthread.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-#define PRINT 0 /* enable/disable prints. */
-
-/* the funny do-while next clearly performs one iteration of the loop.
- * if you are really curious about why there is a loop, please check
- * the course book about the C preprocessor where it is explained. it
- * is to avoid bugs and/or syntax errors in case you use the pr in an
- * if-statement without { }.
- *
- */
-
+#define PRINT 1 /* enable/disable prints. */
 #if PRINT
 #define pr(...)                                                                \
   do {                                                                         \
@@ -146,7 +138,7 @@ static int id(graph_t *g, node_t *v) {
    *
    */
 
-  return v - g->v;
+  return v - g->nodes;
 }
 #endif
 
@@ -357,8 +349,8 @@ static node_t *get_node_with_excess(graph_t *g) {
 static void push(graph_t *graph, node_t *from, node_t *to, edge_t *edge) {
   int remaining_capacity; /* remaining capacity of the edge. */
 
-  pr("push from %d to %d: ", id(g, u), id(g, v));
-  pr("f = %d, c = %d, so ", e->f, e->c);
+  pr("push from %d to %d: ", id(graph, from), id(graph, to));
+  pr("f = %d, c = %d, so ", edge->flow, edge->capacity);
 
   if (from == edge->node_1) {
     remaining_capacity = MIN(from->excess, edge->capacity - edge->flow);
@@ -368,7 +360,7 @@ static void push(graph_t *graph, node_t *from, node_t *to, edge_t *edge) {
     edge->flow -= remaining_capacity;
   }
 
-  pr("pushing %d\n", d);
+  pr("pushing %d\n", remaining_capacity);
 
   from->excess -= remaining_capacity;
   to->excess += remaining_capacity;
@@ -400,7 +392,7 @@ static void push(graph_t *graph, node_t *from, node_t *to, edge_t *edge) {
 static void relabel(graph_t *g, node_t *u) {
   u->height += 1;
 
-  pr("relabel %d now h = %d\n", id(g, u), u->h);
+  pr("relabel %d now h = %d\n", id(g, u), u->height);
 
   add_to_excess_list(g, u);
 }
@@ -412,46 +404,34 @@ static node_t *other(node_t *u, edge_t *e) {
     return e->node_1;
 }
 
-int preflow(graph_t *graph) {
-  node_t *source;
+struct work_args_t {
+  graph_t *graph;
+  // node_t *node;
+};
+void *work(void *arg) {
+  struct work_args_t *args = arg;
+
   node_t *u;
   node_t *v;
   edge_t *edge;
   list_t *p;
   int flow_direction;
+  graph_t *graph;
 
-  source = graph->source;
-  source->height = graph->nbr_nodes;
+  // u = args->node;
+  graph = args->graph;
 
-  p = source->edge;
-
-  /* start by pushing as much as possible (limited by
-   * the edge capacity) from the source to its neighbors.
+  /* if we can push we must push and only if we could
+   * not push anything, we are allowed to relabel.
+   *
+   * we can push to multiple nodes if we wish but
+   * here we just push once for simplicity.
    */
 
-  while (p != NULL) {
-    edge = p->edge;
-    p = p->next;
-
-    source->excess += edge->capacity;
-    push(graph, source, other(source, edge), edge);
-  }
-
-  /* then loop until only s and/or t have excess preflow. */
-
-  while ((u = get_node_with_excess(graph)) != NULL) {
-
-    /* u is any node with excess preflow. */
-
-    pr("selected u = %d with ", id(g, u));
-    pr("h = %d and e = %d\n", u->h, u->e);
-
-    /* if we can push we must push and only if we could
-     * not push anything, we are allowed to relabel.
-     *
-     * we can push to multiple nodes if we wish but
-     * here we just push once for simplicity.
-     */
+  while (1) {
+    if ((u = get_node_with_excess(graph)) == NULL) {
+      return NULL;
+    }
 
     v = NULL;
     p = u->edge;
@@ -480,6 +460,42 @@ int preflow(graph_t *graph) {
       relabel(graph, u);
     }
   }
+
+  return NULL;
+}
+
+int preflow(graph_t *graph) {
+  node_t *source;
+  node_t *u;
+  node_t *v;
+  edge_t *edge;
+  list_t *p;
+  int flow_direction;
+
+  source = graph->source;
+  source->height = graph->nbr_nodes;
+
+  p = source->edge;
+
+  /* start by pushing as much as possible (limited by
+   * the edge capacity) from the source to its neighbors.
+   */
+  while (p != NULL) {
+    edge = p->edge;
+    p = p->next;
+
+    source->excess += edge->capacity;
+    push(graph, source, other(source, edge), edge);
+  }
+
+  /* then loop until only s and/or t have excess preflow. */
+  /* u is any node with excess preflow. */
+  pthread_t thread;
+
+  struct work_args_t arg = {graph};
+
+  pthread_create(&thread, NULL, work, &arg);
+  pthread_join(thread, NULL);
 
   return graph->sink->excess;
 }
