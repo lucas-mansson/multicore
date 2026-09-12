@@ -324,14 +324,13 @@ static graph_t *new_graph(FILE *in, int n, int m) {
   return g;
 }
 
-static void enter_excess(graph_t *g, node_t *v) {
+static void add_to_excess_list(graph_t *g, node_t *v) {
   /* put v at the front of the list of nodes
    * that have excess preflow > 0.
    *
    * note that for the algorithm, this is just
    * a set of nodes which has no order but putting it
    * it first is simplest.
-   *
    */
 
   if (v != g->sink && v != g->source) {
@@ -340,12 +339,11 @@ static void enter_excess(graph_t *g, node_t *v) {
   }
 }
 
-static node_t *leave_excess(graph_t *g) {
+static node_t *get_node_with_excess(graph_t *g) {
   node_t *v;
 
   /* take any node from the set of nodes with excess preflow
    * and for simplicity we always take the first.
-   *
    */
 
   v = g->excess_nodes;
@@ -385,7 +383,7 @@ static void push(graph_t *graph, node_t *from, node_t *to, edge_t *edge) {
 
     /* still some remaining so let u push more. */
 
-    enter_excess(graph, from);
+    add_to_excess_list(graph, from);
   }
 
   if (to->excess == remaining_capacity) {
@@ -395,7 +393,7 @@ static void push(graph_t *graph, node_t *from, node_t *to, edge_t *edge) {
      *
      */
 
-    enter_excess(graph, to);
+    add_to_excess_list(graph, to);
   }
 }
 
@@ -404,7 +402,7 @@ static void relabel(graph_t *g, node_t *u) {
 
   pr("relabel %d now h = %d\n", id(g, u), u->h);
 
-  enter_excess(g, u);
+  add_to_excess_list(g, u);
 }
 
 static node_t *other(node_t *u, edge_t *e) {
@@ -420,7 +418,7 @@ int preflow(graph_t *graph) {
   node_t *v;
   edge_t *edge;
   list_t *p;
-  int b;
+  int flow_direction;
 
   source = graph->source;
   source->height = graph->nbr_nodes;
@@ -429,7 +427,6 @@ int preflow(graph_t *graph) {
 
   /* start by pushing as much as possible (limited by
    * the edge capacity) from the source to its neighbors.
-   *
    */
 
   while (p != NULL) {
@@ -442,7 +439,7 @@ int preflow(graph_t *graph) {
 
   /* then loop until only s and/or t have excess preflow. */
 
-  while ((u = leave_excess(graph)) != NULL) {
+  while ((u = get_node_with_excess(graph)) != NULL) {
 
     /* u is any node with excess preflow. */
 
@@ -454,7 +451,6 @@ int preflow(graph_t *graph) {
      *
      * we can push to multiple nodes if we wish but
      * here we just push once for simplicity.
-     *
      */
 
     v = NULL;
@@ -466,22 +462,23 @@ int preflow(graph_t *graph) {
 
       if (u == edge->node_1) {
         v = edge->node_2;
-        b = 1;
+        flow_direction = 1;
       } else {
         v = edge->node_1;
-        b = -1;
+        flow_direction = -1;
       }
 
-      if (u->height > v->height && b * edge->flow < edge->capacity)
+      if (u->height > v->height && flow_direction * edge->flow < edge->capacity)
         break;
       else
         v = NULL;
     }
 
-    if (v != NULL)
+    if (v != NULL) {
       push(graph, u, v, edge);
-    else
+    } else {
       relabel(graph, u);
+    }
   }
 
   return graph->sink->excess;
