@@ -28,6 +28,7 @@
  */
 
 #include <assert.h>
+#include <bits/pthreadtypes.h>
 #include <ctype.h>
 #include <pthread.h>
 #include <stdarg.h>
@@ -46,6 +47,8 @@
 #endif
 
 #define MIN(a, b) (((a) <= (b)) ? (a) : (b))
+
+#define NBR_THREADS 2
 
 /* introduce names for some structs. a struct is like a class, except
  * it cannot be extended and has no member methods, and everything is
@@ -88,6 +91,7 @@ struct graph_t {
   node_t *source;       /* source.			*/
   node_t *sink;         /* sink.			*/
   node_t *excess_nodes; /* nodes with e > 0 except s,t.	*/
+  pthread_mutex_t excess_nodes_mutex;
 };
 
 /* a remark about C arrays. the phrase above 'array of n nodes' is using
@@ -428,7 +432,13 @@ void *work(void *arg) {
    */
 
   while (1) {
-    if ((u = get_node_with_excess(graph)) == NULL) {
+    pthread_mutex_lock(&graph->excess_nodes_mutex);
+    pr("locking excess_nodes_mutex \n");
+    u = get_node_with_excess(graph);
+    pr("unlocking excess_nodes_mutex \n");
+    pthread_mutex_unlock(&graph->excess_nodes_mutex);
+
+    if (u == NULL) {
       return NULL;
     }
 
@@ -476,6 +486,8 @@ int preflow(graph_t *graph) {
 
   p = source->edge;
 
+  pthread_mutex_init(&graph->excess_nodes_mutex, NULL);
+
   /* start by pushing as much as possible (limited by
    * the edge capacity) from the source to its neighbors.
    */
@@ -491,18 +503,20 @@ int preflow(graph_t *graph) {
   /* u is any node with excess preflow. */
 
   struct work_args_t thread_arg = {graph};
-  int nbr_threads = 2;
+  int nbr_threads = NBR_THREADS;
   pthread_t thread[nbr_threads];
   for (int i = 0; i < nbr_threads; i++) {
     if (pthread_create(&thread[i], NULL, work, &thread_arg) != 0) {
-      error("pthread create failed");
+      error("pthread create failed \n");
     }
+    printf("Creating thread %d \n", i);
   }
 
   for (int i = 0; i < nbr_threads; i++) {
     if (pthread_join(thread[i], NULL) != 0) {
       error("pthread join failed");
     }
+    printf("Destroying thread %d \n", i);
   }
 
   return graph->sink->excess;
