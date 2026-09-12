@@ -6,7 +6,7 @@ import java.util.LinkedList;
 import java.io.*;
 
 class Graph {
-
+	
 	int	s;
 	int	t;
 	int	n;
@@ -49,18 +49,21 @@ class Graph {
 	{
 		int oldve = v.e;
 		int amount;
-		if( a.u == u && a.v == v){
+		if( a.u == u){
 			amount = Math.min(u.e, (a.c - a.f));
 			a.f += amount;
 		}
 		else {
-			amount = Math.min(u.e, a.f);
+			amount = Math.min(u.e, a.f + a.c);
 			a.f -= amount;
 		}
 		
 		u.e -= amount;
 		v.e += amount;
 
+		assert(amount >= 0);
+		assert(u.e >= 0);
+		assert(Math.abs(a.f) <= a.c);
 
 		if(v.e > 0 && !( oldve > 0)){
 			enter_excess(v);
@@ -103,12 +106,18 @@ class Graph {
 			while (iter.hasNext()) {
 				a = iter.next();
 
-				if( (u.h > a.v.h) && (u == a.u) && ((a.c-a.f) > 0) ){
+				if( u == a.u ){
 					v = a.v;
-					break;
-				} else if((u.h > a.u.h) && (u == a.v) && (a.f > 0)){
+					b = 1;
+				} else {
 					v = a.u;
+					b = -1;
+				}
+
+				if(u.h > v.h && b * a.f < a.c){
 					break;
+				} else {
+					v = null;
 				}
 			}
 			if (v != null)

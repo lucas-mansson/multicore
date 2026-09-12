@@ -2,15 +2,16 @@ import java.util.Scanner;
 import java.util.Iterator;
 import java.util.ListIterator;
 import java.util.LinkedList;
-
+import java.util.concurrent.Semaphore;
 import java.io.*;
 
 class Graph {
-
+	int nbrThread = 1;
 	int	s;
 	int	t;
 	int	n;
 	int	m;
+	private Semaphore lock = new Semaphore(1);
 	Node	excess;		// list of nodes with excess preflow
 	Node	node[];
 	Edge	edge[];
@@ -23,7 +24,7 @@ class Graph {
 		this.m		= edge.length;
 	}
 
-	void enter_excess(Node u)
+	synchronized void enter_excess(Node u)
 	{
 		if (u != node[s] && u != node[t]) {
 			u.next = excess;
@@ -94,27 +95,56 @@ class Graph {
 
 			push(node[source], other(a, node[source]), a);
 		}
+		Thread[] threads = new Thread[nbrThread];
 
+		for(int i = 0; i < threads.length; i++){
+			threads[i] = new Thread(() -> {
+				try {
+					thread_loop();
+				} catch (Exception e) {
+					// TODO: handle exception
+				}
+			} 
+		);
+		threads[i].start();
+		}
+		for(int i = 0; i < threads.length; i++){
+			try{
+				threads[i].join();
+			} catch ( Exception e){
+				// do nothing
+			}
+		}
 
-		// main loop
+		return node[t].e;
+	}
+	void thread_loop() throws InterruptedException{
+		ListIterator<Edge>	iter;
+		int				direction;
+		Edge			a;
+		Node			u;
+		Node			v;
 		while (excess != null) {
-			u = excess;
-			v = null;
-			a = null;
-			excess = u.next;
+			try {
+				lock.acquire();
+				u = excess;
+				v = null;
+				a = null;
+				excess = u.next;
+			} finally {
+				lock.release();
+			}
 			iter = u.adj.listIterator();
 			while (iter.hasNext()) {
 				a = iter.next();
-
 				if( u == a.u ){
 					v = a.v;
-					b = 1;
+					direction = 1;
 				} else {
 					v = a.u;
-					b = -1;
+					direction = -1;
 				}
-
-				if(u.h > v.h && b * a.f < a.c){
+				if(u.h > v.h && direction * a.f < a.c){
 					break;
 				} else {
 					v = null;
@@ -125,8 +155,6 @@ class Graph {
 			else
 				relabel(u);
 		}
-
-		return node[t].e;
 	}
 }
 
