@@ -370,10 +370,24 @@ void *work(void *arg) {
         flow_direction = -1;
       }
 
+      node_t *first = u;
+      node_t *second = v;
+      if (id(graph, u) > id(graph, v)) {
+        first = v;
+        second = u;
+      }
+      lock_node(graph, first);
+      lock_node(graph, second);
+      int should_break = 0;
       if (u->height > v->height && flow_direction * edge->flow < edge->capacity)
-        break;
+        should_break = 1;
       else
         v = NULL;
+      unlock_node(graph, first);
+      unlock_node(graph, second);
+      if (should_break) {
+        break;
+      }
     }
 
     if (v != NULL) {
@@ -399,8 +413,8 @@ void *work(void *arg) {
       lock_node(graph, u);
       lock_excess_list(graph);
       relabel(graph, u);
-      unlock_excess_list(graph);
       unlock_node(graph, u);
+      unlock_excess_list(graph);
     }
   }
 
