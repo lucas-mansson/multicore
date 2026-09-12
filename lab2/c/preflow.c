@@ -96,16 +96,6 @@ void unlock_excess_list(graph_t *g) {
   pthread_mutex_unlock(&g->excess_nodes_mutex);
 }
 
-void lock_edge(graph_t *g, edge_t *e) {
-  pr("locking edge (%d, %d) \n", id(g, e->node_1), id(g, e->node_2));
-  pthread_mutex_lock(&e->edge_mutex);
-}
-
-void unlock_edge(graph_t *g, edge_t *e) {
-  pr("locking edge (%d, %d) \n", id(g, e->node_1), id(g, e->node_2));
-  pthread_mutex_unlock(&e->edge_mutex);
-}
-
 void error(const char *fmt, ...) {
   /* print error message and exit.*/
 
@@ -382,6 +372,7 @@ void *work(void *arg) {
       }
 
       lock_nodes(graph, u, v);
+
       int should_break = 0;
       if (u->height > v->height && flow_direction * edge->flow < edge->capacity)
         should_break = 1;
