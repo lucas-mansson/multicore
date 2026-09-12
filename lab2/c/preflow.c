@@ -72,7 +72,7 @@ struct list_t {
 struct node_t {
   int height;   /* height.			*/
   int excess;   /* excess flow.			*/
-  list_t *edge; /* adjacency list.		*/
+  list_t *adj;  /* adjacency list.		*/
   node_t *next; /* with excess preflow.		*/
 };
 
@@ -269,8 +269,8 @@ static void add_edge(node_t *u, edge_t *e) {
 
   p = xmalloc(sizeof(list_t));
   p->edge = e;
-  p->next = u->edge;
-  u->edge = p;
+  p->next = u->adj;
+  u->adj = p;
 }
 
 static void connect(node_t *u, node_t *v, int c, edge_t *e) {
@@ -443,7 +443,7 @@ void *work(void *arg) {
     }
 
     v = NULL;
-    p = u->edge;
+    p = u->adj;
 
     while (p != NULL) {
       edge = p->edge;
@@ -484,7 +484,7 @@ int preflow(graph_t *graph) {
   source = graph->source;
   source->height = graph->nbr_nodes;
 
-  p = source->edge;
+  p = source->adj;
 
   pthread_mutex_init(&graph->excess_nodes_mutex, NULL);
 
@@ -528,7 +528,7 @@ static void free_graph(graph_t *g) {
   list_t *q;
 
   for (i = 0; i < g->nbr_nodes; i += 1) {
-    p = g->nodes[i].edge;
+    p = g->nodes[i].adj;
     while (p != NULL) {
       q = p->next;
       free(p);
