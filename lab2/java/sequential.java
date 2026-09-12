@@ -41,44 +41,76 @@ class Graph {
 
 	void relabel(Node u)
 	{
+		u.h ++;
+		enter_excess(u);
 	}
 
 	void push(Node u, Node v, Edge a)
 	{
+		int oldve = v.e;
+		int amount;
+		if( a.u == u && a.v == v){
+			amount = Math.min(u.e, (a.c - a.f));
+			a.f += amount;
+		}
+		else {
+			amount = Math.min(u.e, a.f);
+			a.f -= amount;
+		}
+		
+		u.e -= amount;
+		v.e += amount;
+
+
+		if(v.e > 0 && !( oldve > 0)){
+			enter_excess(v);
+		}
+		if( u.e > 0){
+			enter_excess(u);
+		}
 	}
 
-	int preflow(int s, int t)
+	int preflow(int source, int t)
 	{
 		ListIterator<Edge>	iter;
-		int			b;
+		int				b;
 		Edge			a;
 		Node			u;
 		Node			v;
 		
-		this.s = s;
+		this.s = source;
 		this.t = t;
-		node[s].h = n;
+		node[source].h = n; // setting source node to height n.
 
+		// initial push from source
 		iter = node[s].adj.listIterator();
 		while (iter.hasNext()) {
 			a = iter.next();
 
-			node[s].e += a.c;
+			node[source].e += a.c;
 
-			push(node[s], other(a, node[s]), a);
+			push(node[source], other(a, node[source]), a);
 		}
 
+
+		// main loop
 		while (excess != null) {
 			u = excess;
 			v = null;
 			a = null;
 			excess = u.next;
-
 			iter = u.adj.listIterator();
 			while (iter.hasNext()) {
 				a = iter.next();
-			}
 
+				if( (u.h > a.v.h) && (u == a.u) && ((a.c-a.f) > 0) ){
+					v = a.v;
+					break;
+				} else if((u.h > a.u.h) && (u == a.v) && (a.f > 0)){
+					v = a.u;
+					break;
+				}
+			}
 			if (v != null)
 				push(u, v, a);
 			else
@@ -100,6 +132,10 @@ class Node {
 	{
 		this.i = i;
 		adj = new LinkedList<Edge>();
+	}
+	public String toString(){
+		return "h = " + h + " e = " + e + " i = " + i;
+
 	}
 }
 
