@@ -4,18 +4,22 @@ import java.util.ListIterator;
 import java.util.LinkedList;
 import java.util.concurrent.Semaphore;
 import java.io.*;
+import java.util.concurrent.atomic.LongAdder;
 
 class Graph {
-	int nbrThread = 3;
+	int nbrThread = 2;
 	int	s;
 	int	t;
 	int	n;
 	int	m;
+	LongAdder tot_ex = new LongAdder();
+	LongAdder tot_wait_lock = new LongAdder();
 	private Semaphore queue_lock = new Semaphore(1);
 	private Semaphore[] node_locks;
 	Node	excess;		// list of nodes with excess preflow
 	Node	node[];
 	Edge	edge[];
+
 
 	Graph(Node node[], Edge edge[])
 	{
@@ -32,7 +36,10 @@ class Graph {
 	void enter_excess(Node u)
 	{
 		try {
+			long before = System.nanoTime();
 			queue_lock.acquire();
+			long after = System.nanoTime();
+			tot_wait_lock.add(after - before);
 			if (u != node[s] && u != node[t]) {
 				u.next = excess;
 				excess = u;
@@ -64,11 +71,17 @@ class Graph {
 		int amount = 0;
 		try {
 			if(u.i > v.i){
+				long before = System.nanoTime();
 				node_locks[u.i].acquire();
 				node_locks[v.i].acquire();
+				long after = System.nanoTime();
+				tot_wait_lock.add(after - before);
 			} else {
+				long before = System.nanoTime();
 				node_locks[v.i].acquire();
 				node_locks[u.i].acquire();
+				long after = System.nanoTime();
+				tot_wait_lock.add(after - before);
 			}
 			oldve = v.e;
 
@@ -126,18 +139,24 @@ class Graph {
 			push(node[source], other(a, node[source]), a);
 		}
 		Thread[] threads = new Thread[nbrThread];
-
+		
+		tot_wait_lock.reset();
 		for(int i = 0; i < threads.length; i++){
 			threads[i] = new Thread(() -> {
-				try {
-					thread_loop();
-				} catch (Exception e) {
-					// TODO: handle exception
-				}
-			} 
-		);
-		threads[i].start();
+					try {
+
+						long before = System.nanoTime();
+						thread_loop();
+						long after = System.nanoTime();
+						tot_ex.add(after - before);
+					} catch (Exception e) {
+						// DO NOTHING.
+					}
+				} 
+			);
+			threads[i].start();
 		}
+
 		for(int i = 0; i < threads.length; i++){
 			try{
 				threads[i].join();
@@ -145,7 +164,11 @@ class Graph {
 				// do nothing
 			}
 		}
-
+		System.err.println("total time spent waiting for lock: " + tot_wait_lock + 
+						   "\nTotal time spent executing:" + tot_ex + 
+						   "\nfraction waitng for lock:" + 
+						   (tot_wait_lock.floatValue()/tot_ex.floatValue()) 
+		);
 		return node[t].e;
 	}
 	void thread_loop() throws InterruptedException{
@@ -154,13 +177,17 @@ class Graph {
 		Edge			a;
 		Node			u;
 		Node			v;
+		int proccessed = 0;
 		while (excess != null) {
 			try {
+				long before = System.nanoTime();
 				queue_lock.acquire();
 				u = excess;
 				v = null;
 				a = null;
 				excess = u.next;
+				long after = System.nanoTime();
+				tot_wait_lock.add(after - before);
 			} finally {
 				queue_lock.release();
 			}
@@ -180,11 +207,14 @@ class Graph {
 					v = null;
 				}
 			}
-			if (v != null)
+			if (v != null){
+				proccessed++;
 				push(u, v, a);
+			}
 			else
 				relabel(u);
 		}
+		System.err.println("Thread exited with " + proccessed + " pushed nodes.");
 	}
 }
 
