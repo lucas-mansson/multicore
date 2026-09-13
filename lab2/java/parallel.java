@@ -6,12 +6,13 @@ import java.util.concurrent.Semaphore;
 import java.io.*;
 
 class Graph {
-	int nbrThread = 1;
+	int nbrThread = 3;
 	int	s;
 	int	t;
 	int	n;
 	int	m;
-	private Semaphore lock = new Semaphore(1);
+	private Semaphore queue_lock = new Semaphore(1);
+	private Semaphore[] node_locks;
 	Node	excess;		// list of nodes with excess preflow
 	Node	node[];
 	Edge	edge[];
@@ -22,13 +23,24 @@ class Graph {
 		this.n		= node.length;
 		this.edge	= edge;
 		this.m		= edge.length;
+		this.node_locks = new Semaphore[node.length];
+		for(int i = 0; i < node_locks.length; i++){
+			node_locks[i] = new Semaphore(1);
+		}
 	}
 
-	synchronized void enter_excess(Node u)
+	void enter_excess(Node u)
 	{
-		if (u != node[s] && u != node[t]) {
-			u.next = excess;
-			excess = u;
+		try {
+			queue_lock.acquire();
+			if (u != node[s] && u != node[t]) {
+				u.next = excess;
+				excess = u;
+			}
+		}catch(Exception e){
+			//do nothing
+		} finally {
+			queue_lock.release();
 		}
 	}
 
@@ -40,34 +52,52 @@ class Graph {
 			return a.u;
 	}
 
-	synchronized void relabel(Node u)
+	void relabel(Node u)
 	{
 		u.h ++;
 		enter_excess(u);
 	}
 
-	synchronized void push(Node u, Node v, Edge a)
+	void push(Node u, Node v, Edge a)
 	{
 		int oldve = v.e;
-		int amount;
-		if( a.u == u){
-			amount = Math.min(u.e, (a.c - a.f));
-			a.f += amount;
+		int amount = 0;
+		try {
+			if(u.i > v.i){
+				node_locks[u.i].acquire();
+				node_locks[v.i].acquire();
+			} else {
+				node_locks[v.i].acquire();
+				node_locks[u.i].acquire();
+			}
+			oldve = v.e;
+
+			if( a.u == u){
+				amount = Math.min(u.e, (a.c - a.f));
+				a.f += amount;
+			}
+			else {
+				amount = Math.min(u.e, a.f + a.c);
+				a.f -= amount;
+			}
+
+			u.e -= amount;
+			v.e += amount;
+		} catch (Exception e) {
+			// do nothing
+		} finally {
+			node_locks[v.i].release();
+			node_locks[u.i].release();
 		}
-		else {
-			amount = Math.min(u.e, a.f + a.c);
-			a.f -= amount;
-		}
-		
-		u.e -= amount;
-		v.e += amount;
+
 
 		assert(amount >= 0);
 		assert(u.e >= 0);
 		assert(Math.abs(a.f) <= a.c);
 
+
 		if(v.e > 0 && !( oldve > 0)){
-			enter_excess(v);
+		enter_excess(v);
 		}
 		if( u.e > 0){
 			enter_excess(u);
@@ -126,13 +156,13 @@ class Graph {
 		Node			v;
 		while (excess != null) {
 			try {
-				lock.acquire();
+				queue_lock.acquire();
 				u = excess;
 				v = null;
 				a = null;
 				excess = u.next;
 			} finally {
-				lock.release();
+				queue_lock.release();
 			}
 			iter = u.adj.listIterator();
 			while (iter.hasNext()) {
