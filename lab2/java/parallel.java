@@ -89,10 +89,14 @@ class Graph {
         int proccessed = 0;
 
         while (true) {
-            long before = System.nanoTime();
-
             try {
+                long before = System.nanoTime();
+
                 queue_lock.lock();
+
+                long after = System.nanoTime();
+                tot_wait_lock.add(after - before);
+
                 u = excess;
                 if (u == null) {
                     break;
@@ -102,8 +106,6 @@ class Graph {
                 excess = u.next;
             } finally {
                 queue_lock.unlock();
-                long after = System.nanoTime();
-                tot_wait_lock.add(after - before);
             }
 
             iter = u.adj.listIterator();
@@ -132,8 +134,11 @@ class Graph {
             }
 
             if (v != null) {
+                long before = System.nanoTime();
                 lock_nodes(u, v);
                 queue_lock.lock();
+                long after = System.nanoTime();
+                tot_wait_lock.add(after - before);
 
                 push(u, v, edge);
 
@@ -142,8 +147,13 @@ class Graph {
                 node_locks[v.i].unlock();
                 proccessed++;
             } else {
+                long before = System.nanoTime();
+
                 node_locks[u.i].lock();
                 queue_lock.lock();
+
+                long after = System.nanoTime();
+                tot_wait_lock.add(after - before);
 
                 relabel(u);
 
