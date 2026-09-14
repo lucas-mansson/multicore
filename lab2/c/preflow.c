@@ -20,7 +20,7 @@
 
 #define MIN(a, b) (((a) <= (b)) ? (a) : (b))
 
-#define NBR_THREADS 3
+#define NBR_THREADS 2
 
 typedef struct graph_t graph_t;
 typedef struct node_t node_t;
@@ -78,7 +78,8 @@ void lock_node(graph_t *g, node_t *u) {
   pr("locking node %d mutex \n", id(g, u));
 
   clock_gettime(CLOCK_MONOTONIC, &end);
-  double elapsed = (end.tv_sec - start.tv_sec) + (end.tv_nsec - start.tv_nsec);
+  double elapsed =
+      (end.tv_sec - start.tv_sec) + (end.tv_nsec - start.tv_nsec) / 1e9;
 
   total_wait_time += elapsed;
 }
@@ -107,7 +108,8 @@ void lock_excess_list(graph_t *g) {
   pr("locking excess_nodes_mutex \n");
 
   clock_gettime(CLOCK_MONOTONIC, &end);
-  double elapsed = (end.tv_sec - start.tv_sec) + (end.tv_nsec - start.tv_nsec);
+  double elapsed =
+      (end.tv_sec - start.tv_sec) + (end.tv_nsec - start.tv_nsec) / 1e9;
 
   total_wait_time += elapsed;
 }
@@ -488,11 +490,12 @@ int preflow(graph_t *graph) {
 
   clock_gettime(CLOCK_MONOTONIC, &end);
   double execution_time =
-      (end.tv_sec - start.tv_sec) + (end.tv_nsec - start.tv_nsec);
+      (end.tv_sec - start.tv_sec) + (end.tv_nsec - start.tv_nsec) / 1e9;
 
   printf("Total wait time: %.15f\n", total_wait_time);
   printf("Total execution time: %.15f\n", execution_time);
-  printf("Fraction spent waiting: %.15f\n", total_wait_time / execution_time);
+  printf("Fraction spent waiting: %.15f\n",
+         total_wait_time / (execution_time * NBR_THREADS));
 
   return graph->sink->excess;
 }
