@@ -33,17 +33,9 @@ class Graph {
     }
 
     void enter_excess(Node u) {
-        try {
-            // queue_lock.lock();
-            if (u != node[s] && u != node[t]) {
-                u.next = excess;
-                excess = u;
-            }
-        } catch (Exception e) {
-            System.exit(1);
-            // do nothing
-        } finally {
-            // queue_lock.unlock();
+        if (u != node[s] && u != node[t]) {
+            u.next = excess;
+            excess = u;
         }
     }
 
@@ -98,21 +90,16 @@ class Graph {
 
         while (true) {
             System.out.println("Hello");
-            try {
-                long before = System.nanoTime();
-                // queue_lock.lock();
-                u = excess;
-                v = null;
-                if (u == null) {
-                    break;
-                }
-                edge = null;
-                excess = u.next;
-                long after = System.nanoTime();
-                tot_wait_lock.add(after - before);
-            } finally {
-                // queue_lock.unlock();
+            long before = System.nanoTime();
+            u = excess;
+            v = null;
+            if (u == null) {
+                break;
             }
+            edge = null;
+            excess = u.next;
+            long after = System.nanoTime();
+            tot_wait_lock.add(after - before);
 
             iter = u.adj.listIterator();
             while (iter.hasNext()) {
@@ -125,39 +112,17 @@ class Graph {
                     direction = -1;
                 }
 
-                try {
-                    // lock_nodes(u, v);
-                    if (u.h > v.h && direction * edge.f < edge.c) {
-                        break;
-                    } else {
-                        v = null;
-                    }
-                } finally {
-                    // node_locks[u.i].unlock();
-                    // node_locks[v.i].unlock();
+                if (u.h > v.h && direction * edge.f < edge.c) {
+                    break;
+                } else {
+                    v = null;
                 }
             }
-            try {
-                // queue_lock.lock();
-                if (v != null) {
-                    try {
-                        // lock_nodes(u, v);
-                        push(u, v, edge);
-                        proccessed++;
-                    } finally {
-                        // node_locks[u.i].unlock();
-                        // node_locks[v.i].unlock();
-                    }
-                } else {
-                    try {
-                        // node_locks[u.i].lock();
-                        relabel(u);
-                    } finally {
-                        // node_locks[u.i].unlock();
-                    }
-                }
-            } finally {
-                // queue_lock.unlock();
+            if (v != null) {
+                push(u, v, edge);
+                proccessed++;
+            } else {
+                relabel(u);
             }
 
         }
