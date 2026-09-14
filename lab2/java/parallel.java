@@ -102,10 +102,9 @@ class Graph {
                 excess = u.next;
             } finally {
                 queue_lock.unlock();
+                long after = System.nanoTime();
+                tot_wait_lock.add(after - before);
             }
-
-            long after = System.nanoTime();
-            tot_wait_lock.add(after - before);
 
             iter = u.adj.listIterator();
             while (iter.hasNext()) {
@@ -118,17 +117,38 @@ class Graph {
                     direction = -1;
                 }
 
+                lock_nodes(u, v);
+                boolean should_break = false;
                 if (u.h > v.h && direction * edge.f < edge.c) {
-                    break;
-                } else {
-                    v = null;
+                    should_break = true;
                 }
+                node_locks[u.i].unlock();
+                node_locks[v.i].unlock();
+
+                if (should_break) {
+                    break;
+                }
+                v = null;
             }
+
             if (v != null) {
+                lock_nodes(u, v);
+                queue_lock.lock();
+
                 push(u, v, edge);
+
+                queue_lock.unlock();
+                node_locks[u.i].unlock();
+                node_locks[v.i].unlock();
                 proccessed++;
             } else {
+                node_locks[u.i].lock();
+                queue_lock.lock();
+
                 relabel(u);
+
+                queue_lock.unlock();
+                node_locks[u.i].unlock();
             }
 
         }
