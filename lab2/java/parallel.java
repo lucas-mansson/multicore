@@ -34,10 +34,7 @@ class Graph {
 
     void enter_excess(Node u) {
         try {
-            long before = System.nanoTime();
-            queue_lock.lock();
-            long after = System.nanoTime();
-            tot_wait_lock.add(after - before);
+            // queue_lock.lock();
             if (u != node[s] && u != node[t]) {
                 u.next = excess;
                 excess = u;
@@ -46,7 +43,7 @@ class Graph {
             System.exit(1);
             // do nothing
         } finally {
-            queue_lock.unlock();
+            // queue_lock.unlock();
         }
     }
 
@@ -65,38 +62,19 @@ class Graph {
     void push(Node u, Node v, Edge a) {
         int oldve = v.e;
         int amount = 0;
-        try {
-            if (u.i > v.i) {
-                long before = System.nanoTime();
-                node_locks[u.i].lock();
-                node_locks[v.i].lock();
-                long after = System.nanoTime();
-                tot_wait_lock.add(after - before);
-            } else {
-                long before = System.nanoTime();
-                node_locks[v.i].lock();
-                node_locks[u.i].lock();
-                long after = System.nanoTime();
-                tot_wait_lock.add(after - before);
-            }
-            oldve = v.e;
 
-            if (a.u == u) {
-                amount = Math.min(u.e, (a.c - a.f));
-                a.f += amount;
-            } else {
-                amount = Math.min(u.e, a.f + a.c);
-                a.f -= amount;
-            }
+        oldve = v.e;
 
-            u.e -= amount;
-            v.e += amount;
-        } catch (Exception e) {
-            // do nothing
-        } finally {
-            node_locks[v.i].unlock();
-            node_locks[u.i].unlock();
+        if (a.u == u) {
+            amount = Math.min(u.e, (a.c - a.f));
+            a.f += amount;
+        } else {
+            amount = Math.min(u.e, a.f + a.c);
+            a.f -= amount;
         }
+
+        u.e -= amount;
+        v.e += amount;
 
         assert (amount >= 0);
         assert (u.e >= 0);
@@ -110,12 +88,88 @@ class Graph {
         }
     }
 
-    int preflow(int source, int t) {
+    void thread_loop() throws InterruptedException {
         ListIterator<Edge> iter;
-        int b;
-        Edge a;
+        int direction;
+        Edge edge;
         Node u;
         Node v;
+        int proccessed = 0;
+
+        while (true) {
+            System.out.println("Hello");
+            try {
+                long before = System.nanoTime();
+                // queue_lock.lock();
+                u = excess;
+                v = null;
+                if (u == null) {
+                    break;
+                }
+                edge = null;
+                excess = u.next;
+                long after = System.nanoTime();
+                tot_wait_lock.add(after - before);
+            } finally {
+                // queue_lock.unlock();
+            }
+
+            iter = u.adj.listIterator();
+            while (iter.hasNext()) {
+                edge = iter.next();
+                if (u == edge.u) {
+                    v = edge.v;
+                    direction = 1;
+                } else {
+                    v = edge.u;
+                    direction = -1;
+                }
+
+                try {
+                    // lock_nodes(u, v);
+                    if (u.h > v.h && direction * edge.f < edge.c) {
+                        break;
+                    } else {
+                        v = null;
+                    }
+                } finally {
+                    // node_locks[u.i].unlock();
+                    // node_locks[v.i].unlock();
+                }
+            }
+            try {
+                // queue_lock.lock();
+                if (v != null) {
+                    try {
+                        // lock_nodes(u, v);
+                        push(u, v, edge);
+                        proccessed++;
+                    } finally {
+                        // node_locks[u.i].unlock();
+                        // node_locks[v.i].unlock();
+                    }
+                } else {
+                    try {
+                        // node_locks[u.i].lock();
+                        relabel(u);
+                    } finally {
+                        // node_locks[u.i].unlock();
+                    }
+                }
+            } finally {
+                // queue_lock.unlock();
+            }
+
+        }
+        System.err.println("Thread exited with " + proccessed + " pushed nodes.");
+    }
+
+    int preflow(int source, int t) {
+        ListIterator<Edge> iter;
+        // int b;
+        Edge a;
+        // Node u;
+        // Node v;
 
         this.s = source;
         this.t = t;
@@ -136,7 +190,6 @@ class Graph {
         for (int i = 0; i < threads.length; i++) {
             threads[i] = new Thread(() -> {
                 try {
-
                     long before = System.nanoTime();
                     thread_loop();
                     long after = System.nanoTime();
@@ -160,52 +213,24 @@ class Graph {
                 "\nTotal time spent executing:" + tot_ex +
                 "\nfraction waitng for lock:" +
                 (tot_wait_lock.floatValue() / tot_ex.floatValue()));
+        System.out.println("Result " + node[t].e);
         return node[t].e;
     }
 
-    void thread_loop() throws InterruptedException {
-        ListIterator<Edge> iter;
-        int direction;
-        Edge a;
-        Node u;
-        Node v;
-        int proccessed = 0;
-        while (excess != null) {
-            try {
-                long before = System.nanoTime();
-                queue_lock.lock();
-                u = excess;
-                v = null;
-                a = null;
-                excess = u.next;
-                long after = System.nanoTime();
-                tot_wait_lock.add(after - before);
-            } finally {
-                queue_lock.unlock();
-            }
-            iter = u.adj.listIterator();
-            while (iter.hasNext()) {
-                a = iter.next();
-                if (u == a.u) {
-                    v = a.v;
-                    direction = 1;
-                } else {
-                    v = a.u;
-                    direction = -1;
-                }
-                if (u.h > v.h && direction * a.f < a.c) {
-                    break;
-                } else {
-                    v = null;
-                }
-            }
-            if (v != null) {
-                proccessed++;
-                push(u, v, a);
-            } else
-                relabel(u);
+    void lock_nodes(Node u, Node v) {
+        if (u.i > v.i) {
+            long before = System.nanoTime();
+            node_locks[u.i].lock();
+            node_locks[v.i].lock();
+            long after = System.nanoTime();
+            tot_wait_lock.add(after - before);
+        } else {
+            long before = System.nanoTime();
+            node_locks[v.i].lock();
+            node_locks[u.i].lock();
+            long after = System.nanoTime();
+            tot_wait_lock.add(after - before);
         }
-        System.err.println("Thread exited with " + proccessed + " pushed nodes.");
     }
 }
 
