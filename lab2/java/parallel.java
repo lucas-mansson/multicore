@@ -89,15 +89,21 @@ class Graph {
         int proccessed = 0;
 
         while (true) {
-            System.out.println("Hello");
             long before = System.nanoTime();
-            u = excess;
-            v = null;
-            if (u == null) {
-                break;
+
+            try {
+                queue_lock.lock();
+                u = excess;
+                if (u == null) {
+                    break;
+                }
+                v = null;
+                edge = null;
+                excess = u.next;
+            } finally {
+                queue_lock.unlock();
             }
-            edge = null;
-            excess = u.next;
+
             long after = System.nanoTime();
             tot_wait_lock.add(after - before);
 
