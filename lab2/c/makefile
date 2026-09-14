@@ -1,5 +1,6 @@
 #DATA = ../../data/railwayplanning/secret/3large.in
 DATA = ../../data/railwayplanning/secret/4huge.in
+#DATA = ../../data/big/002.in
 #DATA = ../../data/tiny/0.in
 
 main:

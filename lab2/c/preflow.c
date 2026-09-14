@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 #define PRINT 0
 #if PRINT
@@ -58,6 +59,9 @@ struct graph_t {
   pthread_mutex_t excess_nodes_mutex;
 };
 
+static double total_execution_time = 0.0f;
+static double total_wait_time = 0.0f;
+
 static char *progname;
 
 static int id(graph_t *g, node_t *v) {
@@ -67,8 +71,16 @@ static int id(graph_t *g, node_t *v) {
 }
 
 void lock_node(graph_t *g, node_t *u) {
+  struct timespec start, end;
+  clock_gettime(CLOCK_MONOTONIC, &start);
+
   pthread_mutex_lock(&u->node_mutex);
   pr("locking node %d mutex \n", id(g, u));
+
+  clock_gettime(CLOCK_MONOTONIC, &end);
+  double elapsed = (end.tv_sec - start.tv_sec) + (end.tv_nsec - start.tv_nsec);
+
+  total_wait_time += elapsed;
 }
 
 void unlock_node(graph_t *g, node_t *u) {
@@ -88,8 +100,16 @@ void lock_nodes(graph_t *g, node_t *u, node_t *v) {
 }
 
 void lock_excess_list(graph_t *g) {
+  struct timespec start, end;
+  clock_gettime(CLOCK_MONOTONIC, &start);
+
   pthread_mutex_lock(&g->excess_nodes_mutex);
   pr("locking excess_nodes_mutex \n");
+
+  clock_gettime(CLOCK_MONOTONIC, &end);
+  double elapsed = (end.tv_sec - start.tv_sec) + (end.tv_nsec - start.tv_nsec);
+
+  total_wait_time += elapsed;
 }
 void unlock_excess_list(graph_t *g) {
   pr("unlocking excess_nodes_mutex \n");
@@ -331,6 +351,9 @@ struct work_args_t {
 void *work(void *arg) {
   struct work_args_t *args = arg;
 
+  int nbr_pushes = 0;
+  int nbr_relabel = 0;
+
   node_t *u;
   node_t *v;
   edge_t *edge;
@@ -349,11 +372,14 @@ void *work(void *arg) {
 
   while (1) {
     lock_excess_list(graph);
+
     u = get_from_excess_list(graph);
     unlock_excess_list(graph);
 
     if (u == NULL) {
-      return NULL;
+      printf("Exiting with %d pushes and %d relabels\n", nbr_pushes,
+             nbr_relabel);
+      break;
     }
 
     v = NULL;
@@ -391,6 +417,7 @@ void *work(void *arg) {
       lock_excess_list(graph);
 
       push(graph, u, v, edge);
+      nbr_pushes++;
 
       unlock_node(graph, u);
       unlock_node(graph, v);
@@ -399,7 +426,11 @@ void *work(void *arg) {
     } else {
       lock_node(graph, u);
       lock_excess_list(graph);
+
       relabel(graph, u);
+
+      nbr_relabel++;
+
       unlock_node(graph, u);
       unlock_excess_list(graph);
     }
@@ -435,6 +466,9 @@ int preflow(graph_t *graph) {
   /* then loop until only s and/or t have excess preflow. */
   /* u is any node with excess preflow. */
 
+  struct timespec start, end;
+  clock_gettime(CLOCK_MONOTONIC, &start);
+
   struct work_args_t thread_arg = {graph};
   int nbr_threads = NBR_THREADS;
   pthread_t thread[nbr_threads];
@@ -451,6 +485,14 @@ int preflow(graph_t *graph) {
     }
     printf("Destroying thread %d \n", i);
   }
+
+  clock_gettime(CLOCK_MONOTONIC, &end);
+  double execution_time =
+      (end.tv_sec - start.tv_sec) + (end.tv_nsec - start.tv_nsec);
+
+  printf("Total wait time: %.15f\n", total_wait_time);
+  printf("Total execution time: %.15f\n", execution_time);
+  printf("Fraction spent waiting: %.15f\n", total_wait_time / execution_time);
 
   return graph->sink->excess;
 }
