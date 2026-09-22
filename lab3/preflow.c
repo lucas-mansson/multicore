@@ -330,7 +330,72 @@ static void relabel(graph_t *g, node_t *u) {
  * let each thread decide on how much its nodes should push to a neighbor or
  * that a relabel is needed
  */
-void phase_1(node_t *u, node_t *v, edge_t *edge, list_t *p, graph_t *graph) {
+typedef struct work_vector_t work_vector_t;
+typedef struct work_t work_t;
+
+struct work_t {
+  node_t *from;
+  node_t *to;
+  // int amount;
+  bool relabel;
+};
+
+struct work_vector_t {
+  work_t *data;
+  size_t size;
+  size_t capacity;
+  pthread_mutex_t mutex;
+};
+
+void init_list(work_vector_t *list) {
+  list->data = NULL;
+  list->size = 0;
+  list->capacity = 0;
+  pthread_mutex_init(&list->mutex, NULL);
+}
+
+void list_destroy(work_vector_t *list) {
+  pthread_mutex_destroy(&list->mutex);
+  free(list->data);
+}
+
+int grow(work_vector_t *list) {
+  size_t newCap = list->capacity == 0 ? 4 : list->capacity * 2;
+  work_t *newData = realloc(list->data, newCap * sizeof(work_t));
+  if (!newData) {
+    return -1;
+  }
+  list->data = newData;
+  list->capacity = newCap;
+  return 0;
+}
+
+void add_to_list(work_vector_t *list, work_t *data) {
+  pthread_mutex_lock(&list->mutex);
+  if (list->size == list->capacity) {
+    if (grow(list) != 0) {
+      pthread_mutex_unlock(&list->mutex);
+      return;
+    }
+  }
+  list->data[list->size++] = *data;
+  pthread_mutex_unlock(&list->mutex);
+}
+
+void remove_from_list(work_vector_t *list, work_t *a) {}
+
+work_t *list_get(work_vector_t *list, size_t pos) {
+  if (pos >= list->size)
+    return NULL;
+  pthread_mutex_lock(&list->mutex);
+  work_t *val = &list->data[pos];
+  pthread_mutex_unlock(&list->mutex);
+  return val;
+}
+
+// calculate work struct and add to work vector
+work_t *phase_1(node_t *u, node_t *v, edge_t *edge, list_t *p, graph_t *graph) {
+  work_t *work = malloc(sizeof(work_t));
   int flow_direction;
 
   v = NULL;
@@ -348,21 +413,30 @@ void phase_1(node_t *u, node_t *v, edge_t *edge, list_t *p, graph_t *graph) {
       flow_direction = -1;
     }
 
-    // lock_nodes(graph, u, v);
-
     int should_break = false;
     if (u->height > v->height && flow_direction * edge->flow < edge->capacity) {
       should_break = true;
     }
-
-    // unlock_node(graph, u);
-    // unlock_node(graph, v);
 
     if (should_break) {
       break;
     }
     v = NULL;
   }
+
+  if (v != NULL) {
+    work->from = u;
+    work->to = v;
+    work->relabel = false;
+
+    // push(graph, u, v, edge);
+  } else {
+    work->from = NULL;
+    work->to = NULL;
+    work->relabel = true;
+    // relabel(graph, u);
+  }
+  return work;
 }
 
 void phase_2() { printf("HELLO!!"); }
@@ -371,6 +445,7 @@ pthread_barrier_t barrier1;
 
 struct work_args_t {
   graph_t *graph;
+  work_vector_t *vector;
 };
 void *work(void *arg) {
   struct work_args_t *args = arg;
@@ -380,8 +455,10 @@ void *work(void *arg) {
   edge_t *edge;
   list_t *p;
   graph_t *graph;
+  work_vector_t *work_list;
 
   graph = args->graph;
+  work_list = args->vector;
 
   while (true) {
     lock_excess_list(graph);
@@ -391,7 +468,9 @@ void *work(void *arg) {
     // For threads that find a node, calculate what needs to be pushed or if
     // relabel is necessary
     if (u != NULL) {
-      phase_1(u, v, edge, p, graph);
+      work_t *work = phase_1(u, v, edge, p, graph);
+      add_to_list(work_list, work);
+      pr("LIST SIZE: %zu\n", work_list->size);
     }
 
     // All threads wait here
@@ -406,11 +485,6 @@ void *work(void *arg) {
     // push();
     // else
     if (ret == PTHREAD_BARRIER_SERIAL_THREAD) {
-      if (v != NULL) {
-        // push(graph, u, v, edge);
-      } else {
-        // relabel(graph, u);
-      }
     }
     pr("Wait 2\n");
     pthread_barrier_wait(&barrier1);
@@ -444,13 +518,17 @@ int preflow(graph_t *graph) {
     push(graph, source, other(source, edge), edge);
   }
 
+  work_vector_t *list = malloc(sizeof(work_vector_t));
+  init_list(list);
+
   /* then loop until only s and/or t have excess preflow. */
   /* u is any node with excess preflow. */
 
-  struct work_args_t thread_arg = {graph};
+  struct work_args_t thread_arg = {graph, list};
   int nbr_threads = NBR_THREADS;
   pthread_barrier_init(&barrier1, NULL, NBR_THREADS);
   pthread_t thread[nbr_threads];
+
   for (int i = 0; i < nbr_threads; i++) {
     printf("Creating thread %d \n", i);
     if (pthread_create(&thread[i], NULL, work, &thread_arg) != 0) {
