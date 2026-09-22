@@ -332,9 +332,6 @@ struct work_args_t {
 void *work(void *arg) {
   struct work_args_t *args = arg;
 
-  int nbr_pushes = 0;
-  int nbr_relabel = 0;
-
   node_t *u;
   node_t *v;
   edge_t *edge;
@@ -358,8 +355,6 @@ void *work(void *arg) {
     unlock_excess_list(graph);
 
     if (u == NULL) {
-      printf("Exiting with %d pushes and %d relabels\n", nbr_pushes,
-             nbr_relabel);
       break;
     }
 
@@ -398,7 +393,6 @@ void *work(void *arg) {
       lock_excess_list(graph);
 
       push(graph, u, v, edge);
-      nbr_pushes++;
 
       unlock_node(graph, u);
       unlock_node(graph, v);
@@ -409,8 +403,6 @@ void *work(void *arg) {
       lock_excess_list(graph);
 
       relabel(graph, u);
-
-      nbr_relabel++;
 
       unlock_node(graph, u);
       unlock_excess_list(graph);
