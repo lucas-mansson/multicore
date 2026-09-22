@@ -530,7 +530,7 @@ void *work(void *arg) {
     pr("SINK %d\n", graph->sink->excess);
     pr("SOURCE %d\n", graph->source->excess);
     if (graph->sink->excess > 0 &&
-        graph->sink->excess == graph->source->excess) {
+        graph->sink->excess == (graph->source->excess)) {
       return NULL;
     }
   }
@@ -554,12 +554,26 @@ int preflow(graph_t *graph) {
   /* start by pushing as much as possible (limited by
    * the edge capacity) from the source to its neighbors.
    */
-  while (p != NULL) {
+  while (p != NULL) {  
     edge = p->edge;
     p = p->next;
 
-    source->excess += edge->capacity;
-    push(graph, source, other(source, edge), edge);
+    int amount;
+
+    if (source == edge->node_1) {
+        amount = edge->capacity - edge->flow;
+        edge->flow += amount;
+    } else {
+        amount = edge->capacity + edge->flow;
+        edge->flow -= amount;
+    }
+
+    node_t *to = other(source, edge);
+
+    source->excess -= amount;
+    to->excess += amount;
+
+    add_to_excess_list(graph, to);
   }
 
   work_vector_t *list = malloc(sizeof(work_vector_t));
