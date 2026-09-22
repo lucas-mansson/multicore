@@ -90,10 +90,10 @@ void lock_nodes(graph_t *g, node_t *u, node_t *v) {
 
 void lock_excess_list(graph_t *g) {
   pthread_mutex_lock(&g->excess_nodes_mutex);
-  pr("locking excess_nodes_mutex \n");
+  // pr("locking excess_nodes_mutex \n");
 }
 void unlock_excess_list(graph_t *g) {
-  pr("unlocking excess_nodes_mutex \n");
+  // pr("unlocking excess_nodes_mutex \n");
   pthread_mutex_unlock(&g->excess_nodes_mutex);
 }
 
@@ -334,8 +334,9 @@ typedef struct work_vector_t work_vector_t;
 typedef struct work_t work_t;
 
 struct work_t {
-  node_t *from;
-  node_t *to;
+  node_t *curr_node;
+  node_t *neighbor;
+  edge_t *edge;
   // int amount;
   bool relabel;
 };
@@ -370,7 +371,7 @@ int grow(work_vector_t *list) {
   return 0;
 }
 
-void add_to_list(work_vector_t *list, work_t *data) {
+void add_to_work_vector(work_vector_t *list, work_t *data) {
   pthread_mutex_lock(&list->mutex);
   if (list->size == list->capacity) {
     if (grow(list) != 0) {
@@ -382,13 +383,24 @@ void add_to_list(work_vector_t *list, work_t *data) {
   pthread_mutex_unlock(&list->mutex);
 }
 
-void remove_from_list(work_vector_t *list, work_t *a) {}
+void remove_from_work_vector(work_vector_t *list, size_t pos) {
+  assert(pos < list->size);
 
-work_t *list_get(work_vector_t *list, size_t pos) {
-  if (pos >= list->size)
-    return NULL;
   pthread_mutex_lock(&list->mutex);
+
+  for (size_t i = pos; i < list->size - 1; i++)
+    list->data[i] = list->data[i + 1];
+  list->size--;
+
+  pthread_mutex_unlock(&list->mutex);
+}
+
+work_t *work_vector_get(work_vector_t *list, size_t pos) {
+  assert(pos < list->size);
+  pthread_mutex_lock(&list->mutex);
+
   work_t *val = &list->data[pos];
+
   pthread_mutex_unlock(&list->mutex);
   return val;
 }
@@ -424,22 +436,47 @@ work_t *phase_1(node_t *u, node_t *v, edge_t *edge, list_t *p, graph_t *graph) {
     v = NULL;
   }
 
-  if (v != NULL) {
-    work->from = u;
-    work->to = v;
-    work->relabel = false;
+  work->curr_node = u;
 
-    // push(graph, u, v, edge);
+  if (v != NULL) {
+    // Should push
+    work->neighbor = v;
+    work->edge = edge;
+    work->relabel = false;
   } else {
-    work->from = NULL;
-    work->to = NULL;
+    // Should relabel
+    work->neighbor = NULL;
+    work->edge = NULL;
     work->relabel = true;
-    // relabel(graph, u);
   }
   return work;
 }
 
-void phase_2() { printf("HELLO!!"); }
+void phase_2(work_vector_t *work_list, graph_t *graph) {
+
+  for (int i = 0; i < work_list->size; i++) {
+    work_t *curr_work = work_vector_get(work_list, i);
+    if (curr_work->neighbor == NULL && curr_work->edge == NULL &&
+        curr_work->relabel == true) {
+      // Should relabel
+      pr("SHOULD RELABEL\n");
+      relabel(graph, curr_work->curr_node);
+
+    } else if (curr_work->neighbor != NULL && curr_work->edge != NULL &&
+               curr_work->relabel == false) {
+      // should push
+      pr("SHOULD PUSH\n");
+      push(graph, curr_work->curr_node, curr_work->neighbor, curr_work->edge);
+
+    } else {
+      pr("ERROR ILLEGAL STATE!!!!");
+      exit(1);
+    }
+  }
+  for (int i = 0; i < work_list->size; i++) {
+    remove_from_work_vector(work_list, i);
+  }
+}
 
 pthread_barrier_t barrier1;
 
@@ -460,6 +497,8 @@ void *work(void *arg) {
   graph = args->graph;
   work_list = args->vector;
 
+  bool finished = false;
+
   while (true) {
     lock_excess_list(graph);
     u = get_from_excess_list(graph);
@@ -469,7 +508,7 @@ void *work(void *arg) {
     // relabel is necessary
     if (u != NULL) {
       work_t *work = phase_1(u, v, edge, p, graph);
-      add_to_list(work_list, work);
+      add_to_work_vector(work_list, work);
       pr("LIST SIZE: %zu\n", work_list->size);
     }
 
@@ -480,15 +519,14 @@ void *work(void *arg) {
 
     // Only one thread performs the updating of the flows, heights, and excesses
 
-    // For item in list
-    // if (should_push)
-    // push();
-    // else
     if (ret == PTHREAD_BARRIER_SERIAL_THREAD) {
+      if (work_list->size == 0) {
+        finished = true;
+      }
+      phase_2(work_list, graph);
     }
     pr("Wait 2\n");
     pthread_barrier_wait(&barrier1);
-    return NULL;
   }
 
   return NULL;
