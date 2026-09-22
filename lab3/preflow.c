@@ -3,11 +3,12 @@
 #include <ctype.h>
 #include <pthread.h>
 #include <stdarg.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-#define PRINT 0
+#define PRINT 1
 #if PRINT
 #define pr(...)                                                                \
   do {                                                                         \
@@ -19,7 +20,7 @@
 
 #define MIN(a, b) (((a) <= (b)) ? (a) : (b))
 
-#define NBR_THREADS 2
+#define NBR_THREADS 3
 
 typedef struct graph_t graph_t;
 typedef struct node_t node_t;
@@ -62,7 +63,6 @@ static char *progname;
 
 static int id(graph_t *g, node_t *v) {
   /* return the node index for v.*/
-
   return v - g->nodes;
 }
 
@@ -326,6 +326,49 @@ static void relabel(graph_t *g, node_t *u) {
   add_to_excess_list(g, u);
 }
 
+/*
+ * let each thread decide on how much its nodes should push to a neighbor or
+ * that a relabel is needed
+ */
+void phase_1(node_t *u, node_t *v, edge_t *edge, list_t *p, graph_t *graph) {
+  int flow_direction;
+
+  v = NULL;
+  p = u->adj;
+
+  while (p != NULL) {
+    edge = p->edge;
+    p = p->next;
+
+    if (u == edge->node_1) {
+      v = edge->node_2;
+      flow_direction = 1;
+    } else {
+      v = edge->node_1;
+      flow_direction = -1;
+    }
+
+    // lock_nodes(graph, u, v);
+
+    int should_break = false;
+    if (u->height > v->height && flow_direction * edge->flow < edge->capacity) {
+      should_break = true;
+    }
+
+    // unlock_node(graph, u);
+    // unlock_node(graph, v);
+
+    if (should_break) {
+      break;
+    }
+    v = NULL;
+  }
+}
+
+void phase_2() { printf("HELLO!!"); }
+
+pthread_barrier_t barrier1;
+
 struct work_args_t {
   graph_t *graph;
 };
@@ -336,77 +379,42 @@ void *work(void *arg) {
   node_t *v;
   edge_t *edge;
   list_t *p;
-  int flow_direction;
   graph_t *graph;
 
   graph = args->graph;
 
-  /* if we can push we must push and only if we could
-   * not push anything, we are allowed to relabel.
-   *
-   * we can push to multiple nodes if we wish but
-   * here we just push once for simplicity.
-   */
-
-  while (1) {
+  while (true) {
     lock_excess_list(graph);
-
     u = get_from_excess_list(graph);
     unlock_excess_list(graph);
 
-    if (u == NULL) {
-      break;
+    // For threads that find a node, calculate what needs to be pushed or if
+    // relabel is necessary
+    if (u != NULL) {
+      phase_1(u, v, edge, p, graph);
     }
 
-    v = NULL;
-    p = u->adj;
+    // All threads wait here
+    pr("Wait 1\n");
+    int ret = pthread_barrier_wait(&barrier1);
+    pr("Ret: %d\n", ret);
 
-    while (p != NULL) {
-      edge = p->edge;
-      p = p->next;
+    // Only one thread performs the updating of the flows, heights, and excesses
 
-      if (u == edge->node_1) {
-        v = edge->node_2;
-        flow_direction = 1;
+    // For item in list
+    // if (should_push)
+    // push();
+    // else
+    if (ret == PTHREAD_BARRIER_SERIAL_THREAD) {
+      if (v != NULL) {
+        // push(graph, u, v, edge);
       } else {
-        v = edge->node_1;
-        flow_direction = -1;
+        // relabel(graph, u);
       }
-
-      lock_nodes(graph, u, v);
-
-      int should_break = 0;
-      if (u->height > v->height && flow_direction * edge->flow < edge->capacity)
-        should_break = 1;
-
-      unlock_node(graph, u);
-      unlock_node(graph, v);
-
-      if (should_break) {
-        break;
-      }
-      v = NULL;
     }
-
-    if (v != NULL) {
-      lock_nodes(graph, u, v);
-      lock_excess_list(graph);
-
-      push(graph, u, v, edge);
-
-      unlock_node(graph, u);
-      unlock_node(graph, v);
-      unlock_excess_list(graph);
-
-    } else {
-      lock_node(graph, u);
-      lock_excess_list(graph);
-
-      relabel(graph, u);
-
-      unlock_node(graph, u);
-      unlock_excess_list(graph);
-    }
+    pr("Wait 2\n");
+    pthread_barrier_wait(&barrier1);
+    return NULL;
   }
 
   return NULL;
@@ -441,12 +449,13 @@ int preflow(graph_t *graph) {
 
   struct work_args_t thread_arg = {graph};
   int nbr_threads = NBR_THREADS;
+  pthread_barrier_init(&barrier1, NULL, NBR_THREADS);
   pthread_t thread[nbr_threads];
   for (int i = 0; i < nbr_threads; i++) {
+    printf("Creating thread %d \n", i);
     if (pthread_create(&thread[i], NULL, work, &thread_arg) != 0) {
       error("pthread create failed \n");
     }
-    printf("Creating thread %d \n", i);
   }
 
   for (int i = 0; i < nbr_threads; i++) {
