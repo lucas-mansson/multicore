@@ -527,6 +527,12 @@ void *work(void *arg) {
     }
     pr("Wait 2\n");
     pthread_barrier_wait(&barrier1);
+    pr("SINK %d\n", graph->sink->excess);
+    pr("SOURCE %d\n", graph->source->excess);
+    if (graph->sink->excess > 0 &&
+        graph->sink->excess == graph->source->excess) {
+      return NULL;
+    }
   }
 
   return NULL;
