@@ -281,8 +281,8 @@ static void relabel(graph_t *g, node_t *u) {
   add_to_excess_list(g, u);
 }
 
-node_t *getNode(size_t thread_id, graph_t *graph){
-    node_t *u = graph->excess_nodes;
+node_t *getNode(size_t thread_id, node_t *excess_nodes){
+    node_t *u = excess_nodes;
     for (int i = 0; i < thread_id && u != NULL; i++){
       u = u->next;
     }
@@ -301,7 +301,6 @@ struct work_t {
   edge_t *edge;
   // int amount;
   bool relabel;
-  bool vaild; // used for if this has been proccesed before or not.
   int newHeight;
 };
 
@@ -335,7 +334,7 @@ void phase_1(node_t *u, node_t *v, edge_t *edge, list_t *p, work_t *work, graph_
     }
     v = NULL;
   }
-
+  assert(min_height != __INT_MAX__);
   work->curr_node = u;
 
   if (v != NULL) {
@@ -343,46 +342,33 @@ void phase_1(node_t *u, node_t *v, edge_t *edge, list_t *p, work_t *work, graph_
     work->neighbor = v;
     work->edge = edge;
     work->relabel = false;
-    work->vaild = true;
   } else {
     // Should relabel
     work->neighbor = NULL;
     work->edge = NULL;
     work->relabel = true;
-    work->vaild = true;
     work->newHeight = min_height + 1;
   }
 }
 
-void phase_2(work_t *work_list, graph_t *graph) {
+void phase_2(work_t **work_list, size_t *work_counts, graph_t *graph) {
+  graph->excess_nodes = NULL;
 
-  for (int i = 0; i < NBR_THREADS && graph->excess_nodes != NULL; i++) {
-    node_t *u = graph->excess_nodes;
-    graph->excess_nodes = u->next;
-    u->next = NULL;
-  }
   for (int i = 0; i < NBR_THREADS; i++) {
-    work_t *curr_work = &work_list[i];
-    if(curr_work->vaild){
-      if (curr_work->neighbor == NULL && curr_work->edge == NULL &&
-        curr_work->relabel == true) {
-        // Should relabel
+
+    for(size_t j = 0; j < work_counts[i]; ++j){
+      work_t *work = &work_list[i][j];
+      if (work->relabel == true) {
         pr("SHOULD RELABEL\n");
-        curr_work->curr_node->height = curr_work->newHeight;
-        add_to_excess_list(graph, curr_work->curr_node);
-          
-      } else if (curr_work->neighbor != NULL && curr_work->edge != NULL &&
-        curr_work->relabel == false) {
-        // should push
-        pr("SHOULD PUSH\n");
-        push(graph, curr_work->curr_node, curr_work->neighbor, curr_work->edge);
+        work->curr_node->height = work->newHeight;
+        add_to_excess_list(graph, work->curr_node);
           
       } else {
-        pr("ERROR ILLEGAL STATE!!!!");
-        exit(1);
-      }
-      curr_work->vaild = false;
+        pr("SHOULD PUSH\n");
+        push(graph, work->curr_node, work->neighbor, work->edge);
+      } 
     }
+    work_counts[i] = 0;
   }
 }
 
@@ -390,7 +376,8 @@ pthread_barrier_t barrier1;
 
 struct work_args_t {
   graph_t *graph;
-  work_t *vector;
+  work_t **vector; // vecotr of pointers
+  size_t *work_counts;
   size_t id;
 };
 void *work(void *arg) {
@@ -400,22 +387,29 @@ void *work(void *arg) {
   edge_t *edge;
   list_t *p;
   graph_t *graph;
-  work_t *work_list;
+  work_t **work_list;
   int thread_id ;
+  size_t *work_counts = args->work_counts;
   
   thread_id = args->id;
   graph = args->graph;
   work_list = args->vector;
 
-  bool finished = false;
   pr("thread id %d\n",thread_id);
+  
   while (true) {
-    u = getNode(thread_id, graph);
-    // For threads that find a node, calculate what needs to be pushed or if
-    // relabel is necessary
-    work_list[thread_id].vaild = false;
-    if (u != NULL) {
-      phase_1(u, v, edge, p, &work_list[thread_id], graph);
+    u = graph->excess_nodes;
+    for (int i = 0; i < thread_id && u != NULL; i++) {
+        u = u->next;
+    }
+    while(u != NULL){
+      work_t *work = &work_list[thread_id][work_counts[thread_id]++];
+
+      phase_1(u, v, edge, p, work, graph);
+
+      for (int i = 0; i < NBR_THREADS && u != NULL; i++) {
+          u = u->next;
+      }
     }
 
     // All threads wait here
@@ -426,7 +420,7 @@ void *work(void *arg) {
     // Only one thread performs the updating of the flows, heights, and excesses
 
     if (ret == PTHREAD_BARRIER_SERIAL_THREAD) {
-      phase_2(work_list, graph);
+      phase_2(work_list, work_counts, graph);
     }
     pr("Wait 2\n");
     pthread_barrier_wait(&barrier1);
@@ -478,7 +472,7 @@ int preflow(graph_t *graph) {
 
     add_to_excess_list(graph, to);
   }
-  work_t work_list[NBR_THREADS] = {0};
+  work_t *work_list[NBR_THREADS] = {0};
 
   /* then loop until only s and/or t have excess preflow. */
   /* u is any node with excess preflow. */
@@ -486,13 +480,16 @@ int preflow(graph_t *graph) {
   int nbr_threads = NBR_THREADS;
   pthread_barrier_init(&barrier1, NULL, NBR_THREADS);
   pthread_t thread[nbr_threads];
+  size_t work_counts[NBR_THREADS] = {0};
   struct work_args_t thread_arg[nbr_threads];
   
   for (int i = 0; i < nbr_threads; i++) {
     printf("Creating thread %d \n", i);
-    thread_arg[i] =(struct work_args_t) {graph, work_list, i}; // if i dont do this all the threads get the same id.
+    work_list[i] = xmalloc(graph->nbr_nodes * sizeof(work_t));
+    thread_arg[i] =(struct work_args_t) {graph, work_list, work_counts, i}; // if i dont do this all the threads get the same id.
     if (pthread_create(&thread[i], NULL, work, &thread_arg[i]) != 0) {
       error("pthread create failed \n");
+      free(work_list[i]); // i guess?
     }
   }
 
@@ -500,6 +497,7 @@ int preflow(graph_t *graph) {
     if (pthread_join(thread[i], NULL) != 0) {
       error("pthread join failed");
     }
+    free(work_list[i]);
     printf("Destroying thread %d \n", i);
   }
 

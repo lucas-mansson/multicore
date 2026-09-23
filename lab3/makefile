@@ -1,7 +1,9 @@
 #DATA = ../data/railwayplanning/secret/3large.in
 #DATA = ../data/railwayplanning/secret/4huge.in
 #DATA = ../data/big/002.in
-DATA = ../data/tiny/0.in
+#DATA = ../data/tiny/0.in
+#DATA = ../data/railwayplanning/secret/1small.in
+DATA = ../data/huge/001.in
 
 main:
 	gcc -o preflow preflow.c -O3 -pthread
@@ -10,7 +12,7 @@ main:
 
 test: 
 	gcc -o preflow preflow.c -g -O3 -pthread
-	./preflow < $(DATA) 
+	time ./preflow < $(DATA) 
 
 hg:
 	gcc -o preflow preflow.c -g -O3 -pthread
