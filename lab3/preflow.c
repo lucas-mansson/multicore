@@ -325,17 +325,13 @@ void phase_1(node_t *u, node_t *v, edge_t *edge, list_t *p, work_t *work, graph_
       flow_direction = -1;
     }
 
-    int should_break = false;
     if(flow_direction * edge->flow < edge->capacity){
       if(v->height < min_height){
         min_height = v->height;
       }
       if(u->height > v->height) {
-        should_break = true;
+        break;
       }
-    }
-    if (should_break) {
-      break;
     }
     v = NULL;
   }
