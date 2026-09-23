@@ -45,7 +45,6 @@ struct edge_t {
   node_t *node_2; /* the other. 			*/
   int flow;       /* flow > 0 if from u to v.	*/
   int capacity;   /* capacity.			*/
-  pthread_mutex_t edge_mutex;
 };
 
 struct graph_t {
@@ -303,6 +302,7 @@ struct work_t {
   // int amount;
   bool relabel;
   bool vaild; // used for if this has been proccesed before or not.
+  int newHeight;
 };
 
 // calculate work struct and add to work vector
@@ -311,6 +311,7 @@ void phase_1(node_t *u, node_t *v, edge_t *edge, list_t *p, work_t *work, graph_
 
   v = NULL;
   p = u->adj;
+  int min_height = __INT_MAX__;
 
   while (p != NULL) {
     edge = p->edge;
@@ -325,10 +326,14 @@ void phase_1(node_t *u, node_t *v, edge_t *edge, list_t *p, work_t *work, graph_
     }
 
     int should_break = false;
-    if (u->height > v->height && flow_direction * edge->flow < edge->capacity) {
-      should_break = true;
+    if(flow_direction * edge->flow < edge->capacity){
+      if(v->height < min_height){
+        min_height = v->height;
+      }
+      if(u->height > v->height) {
+        should_break = true;
+      }
     }
-
     if (should_break) {
       break;
     }
@@ -349,6 +354,7 @@ void phase_1(node_t *u, node_t *v, edge_t *edge, list_t *p, work_t *work, graph_
     work->edge = NULL;
     work->relabel = true;
     work->vaild = true;
+    work->newHeight = min_height + 1;
   }
 }
 
@@ -366,7 +372,8 @@ void phase_2(work_t *work_list, graph_t *graph) {
         curr_work->relabel == true) {
         // Should relabel
         pr("SHOULD RELABEL\n");
-        relabel(graph, curr_work->curr_node);
+        curr_work->curr_node->height = curr_work->newHeight;
+        add_to_excess_list(graph, curr_work->curr_node);
           
       } else if (curr_work->neighbor != NULL && curr_work->edge != NULL &&
         curr_work->relabel == false) {
