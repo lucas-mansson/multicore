@@ -21,7 +21,7 @@
 
 #define MIN(a, b) (((a) <= (b)) ? (a) : (b))
 
-#define NBR_THREADS 3
+#define NBR_THREADS 12
 
 typedef struct graph_t graph_t;
 typedef struct node_t node_t;
