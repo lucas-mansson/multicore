@@ -33,7 +33,6 @@ impl Edge {
 }
 
 fn main() {
-
 	let n: usize = read!();		/* n nodes.						*/
 	let m: usize = read!();		/* m edges.						*/
 	let _c: usize = read!();	/* underscore avoids warning about an unused variable.	*/
@@ -80,6 +79,7 @@ fn main() {
 
 	println!("initial pushes");
 	let iter = adj[s].iter();
+	nodes[0].lock().unwrap().height = n as i32;
 
 	for &edge_idx in iter {
 		let mut edge = edges[edge_idx].lock().unwrap();
@@ -93,11 +93,10 @@ fn main() {
 		source.excess -= c;
 		neighbor.excess += c;
 
-		excess.push_back(neighbor_idx);
+		add_to_excess_list(neighbor_idx, &mut excess, t);
 
-		println!("Source pushing {} to node {}", c, neighbor_idx);
+		println!("Source with height {} pushing {} to node {}", source.height, c, neighbor_idx);
 	}
-
 
 	while !excess.is_empty() {
 		let curr_node_i = excess.pop_front().unwrap();
@@ -115,7 +114,6 @@ fn main() {
 			println!("Curr node: {} with excess {}", curr_node_i, u.excess);
 
 			let mut neighbor_i;
-			
 			let mut direction = 1;
 			if curr_node_i == edge.u {
 				neighbor_i = edge.v;
@@ -126,17 +124,16 @@ fn main() {
 			} else {
 				panic!("Illegal state");
 			}
-
-			
 			let v = &mut nodes[neighbor_i].lock().unwrap();
+
 			
 			let can_push = u.height > v.height && direction * edge.flow < edge.capacity;
 			if can_push {
-				println!("Pushing");
-				push(u, v, &mut edge, &mut excess);
+				push(u, v, &mut edge, &mut excess, t);
 			} else {
 				println!("Relabelling node {} with height {}", curr_node_i, u.height);
 				relabel(u);
+				add_to_excess_list(u.i, &mut excess, t);
 			}
 		}
 	}
@@ -145,7 +142,7 @@ fn main() {
 
 }
 
-fn push(u: &mut Node, v: &mut Node, edge: &mut Edge, excess: &mut VecDeque<usize>) {
+fn push(u: &mut Node, v: &mut Node, edge: &mut Edge, excess: &mut VecDeque<usize>, sink: usize) {
 	let mut delta = 0;
 
 	if u.i == edge.u {
@@ -158,6 +155,8 @@ fn push(u: &mut Node, v: &mut Node, edge: &mut Edge, excess: &mut VecDeque<usize
 		panic!("Bruh");
 	}
 
+	println!("Pushing {} from {} (e={}) to {} (e={})", delta, u.i, u.excess, v.i, v.excess);
+
 	u.excess -= delta;
 	v.excess += delta;
 
@@ -165,12 +164,15 @@ fn push(u: &mut Node, v: &mut Node, edge: &mut Edge, excess: &mut VecDeque<usize
 	assert!(u.excess >= 0);
 	assert!(edge.flow.abs() <= edge.capacity);
 
+
+	println!("u.excess {}", u.excess);
+	println!("v.excess {}", v.excess);
 	if u.excess > 0 {
-		excess.push_back(u.i);
+		add_to_excess_list(v.i, excess, sink);
 	}
 	// if v has delta flow, it previously had 0
 	if v.excess - delta == 0 {
-		excess.push_back(v.i);
+		add_to_excess_list(v.i, excess, sink);
 	}
 }
 
@@ -179,4 +181,10 @@ fn relabel(node: &mut Node) {
 		panic!("You STUPID");
 	}
 	node.height += 1;
+}
+
+fn add_to_excess_list(node_i: usize, excess: &mut VecDeque<usize>, t: usize) {
+	if node_i != t {
+		excess.push_back(node_i);
+	}
 }
