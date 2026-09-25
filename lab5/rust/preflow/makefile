@@ -1,4 +1,7 @@
-DATA	= ../../data
+DATA		= ../../../data
+TEST    	= $(DATA)/railwayplanning/secret/0mini.in
+TEST_OUT 	= $(DATA)/railwayplanning/secret/0mini.ans 
+
 
 all:
 	cargo run < $(DATA)/tiny/0.in | grep '^f = ' | sed 's/f = //' > out
@@ -35,3 +38,7 @@ all:
 	diff $(DATA)/huge/001.ans out
 
 	@echo PASS all tests
+
+
+test:
+	cargo run < $(TEST) 
