@@ -23,6 +23,8 @@
 #define MIN(a, b) (((a) <= (b)) ? (a) : (b))
 
 #define NBR_THREADS 12
+#define MEMORY_ORDER memory_order_seq_cst
+// #define MEMORY_ORDER memory_order_relaxed
 
 typedef struct graph_t graph_t;
 typedef struct node_t node_t;
@@ -328,7 +330,7 @@ void phase_1(node_t *u, node_t *v, edge_t *edge, list_t *p, work_t *work,
 
     if (flow_direction * edge->flow < edge->capacity) {
       // min_height = v->height;
-      int h = atomic_load(&v->height);
+      int h = atomic_load_explicit(&v->height, MEMORY_ORDER);
       if (h < min_height) {
         min_height = h;
       }
@@ -338,6 +340,7 @@ void phase_1(node_t *u, node_t *v, edge_t *edge, list_t *p, work_t *work,
     }
     v = NULL;
   }
+
   assert(min_height != __INT_MAX__);
   work->curr_node = u;
 
@@ -354,7 +357,7 @@ void phase_1(node_t *u, node_t *v, edge_t *edge, list_t *p, work_t *work,
     // work->newHeight = min_height + 1;
 
     // u->height = min_height + 1;
-    atomic_store(&u->height, min_height + 1);
+    atomic_store_explicit(&u->height, min_height + 1, MEMORY_ORDER);
   }
 }
 
