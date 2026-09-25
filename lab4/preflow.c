@@ -327,8 +327,10 @@ void phase_1(node_t *u, node_t *v, edge_t *edge, list_t *p, work_t *work,
     }
 
     if (flow_direction * edge->flow < edge->capacity) {
-      if (v->height < min_height) {
-        min_height = v->height;
+      // min_height = v->height;
+      int h = atomic_load(&v->height);
+      if (h < min_height) {
+        min_height = h;
       }
       if (u->height > v->height) {
         break;
@@ -349,8 +351,10 @@ void phase_1(node_t *u, node_t *v, edge_t *edge, list_t *p, work_t *work,
     work->neighbor = NULL;
     work->edge = NULL;
     work->relabel = true;
-    u->height = min_height + 1;
     // work->newHeight = min_height + 1;
+
+    // u->height = min_height + 1;
+    atomic_store(&u->height, min_height + 1);
   }
 }
 
