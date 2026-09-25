@@ -3,6 +3,7 @@
 #include <ctype.h>
 #include <pthread.h>
 #include <stdarg.h>
+#include <stdatomic.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdio.h>
@@ -34,10 +35,10 @@ struct list_t {
 };
 
 struct node_t {
-  int height;   /* height.			*/
-  int excess;   /* excess flow.			*/
-  list_t *adj;  /* adjacency list.		*/
-  node_t *next; /* with excess preflow.		*/
+  atomic_int height; /* height.			*/
+  int excess;        /* excess flow.			*/
+  list_t *adj;       /* adjacency list.		*/
+  node_t *next;      /* with excess preflow.		*/
 };
 
 struct edge_t {
@@ -301,7 +302,7 @@ struct work_t {
   edge_t *edge;
   // int amount;
   bool relabel;
-  int newHeight;
+  // int newHeight;
 };
 
 // calculate work struct and add to work vector
@@ -348,7 +349,8 @@ void phase_1(node_t *u, node_t *v, edge_t *edge, list_t *p, work_t *work,
     work->neighbor = NULL;
     work->edge = NULL;
     work->relabel = true;
-    work->newHeight = min_height + 1;
+    u->height = min_height + 1;
+    // work->newHeight = min_height + 1;
   }
 }
 
@@ -356,12 +358,11 @@ void phase_2(work_t **work_list, size_t *work_counts, graph_t *graph) {
   graph->excess_nodes = NULL;
 
   for (int i = 0; i < NBR_THREADS; i++) {
-
     for (size_t j = 0; j < work_counts[i]; ++j) {
       work_t *work = &work_list[i][j];
       if (work->relabel == true) {
         pr("SHOULD RELABEL\n");
-        work->curr_node->height = work->newHeight;
+        // work->curr_node->height = work->newHeight;
         add_to_excess_list(graph, work->curr_node);
 
       } else {
