@@ -3,7 +3,7 @@
 use std::sync::{Mutex,Arc};
 use std::collections::LinkedList;
 use std::cmp::{self, min};
-use std::thread;
+//use std::thread;
 use std::collections::VecDeque;
 
 struct Node {
@@ -13,23 +13,22 @@ struct Node {
 }
 
 struct Edge {
-        u:      usize,  
-        v:      usize,
-        flow:      i32,
-        capacity:      i32,
+	u:      usize,  
+	v:      usize,
+	flow:      i32,
+	capacity:      i32,
 }
 
 impl Node {
 	fn new(ii:usize) -> Node {
 		Node { i: ii, excess: 0, height: 0 }
 	}
-
 }
 
 impl Edge {
-        fn new(uu:usize, vv:usize,cc:i32) -> Edge {
-                Edge { u: uu, v: vv, flow: 0, capacity: cc }      
-        }
+	fn new(uu:usize, vv:usize,cc:i32) -> Edge {
+		Edge { u: uu, v: vv, flow: 0, capacity: cc }      
+	}
 }
 
 fn main() {
@@ -100,21 +99,28 @@ fn main() {
 
 	while !excess.is_empty() {
 		let curr_node_i = excess.pop_front().unwrap();
+		println!("Got node {} from excess list", curr_node_i);
 
+		print!("Current excess list");
+		print!("[");
+		for i in &excess {
+			print!("{}, ", i);
+		}
+		print!("]\n");
 
+		let u = &mut nodes[curr_node_i].lock().unwrap();
 		let iter = adj[curr_node_i].iter();
 		for &edge_idx in iter {
-			let u = &mut nodes[curr_node_i].lock().unwrap();
-			let mut edge = edges[edge_idx].lock().unwrap();
-
+		
 			if u.excess == 0 {
+				println!("{} has 0 excess, breaking", u.i);
 				break;
-			}		
-			
-			println!("Curr node: {} with excess {}", curr_node_i, u.excess);
+			}
 
-			let mut neighbor_i;
-			let mut direction = 1;
+			let mut edge = edges[edge_idx].lock().unwrap();		
+
+			let neighbor_i;
+			let direction;
 			if curr_node_i == edge.u {
 				neighbor_i = edge.v;
 				direction = 1;
@@ -124,17 +130,21 @@ fn main() {
 			} else {
 				panic!("Illegal state");
 			}
-			let v = &mut nodes[neighbor_i].lock().unwrap();
+			assert!(direction == 1 || direction == -1);
 
+			let v = &mut nodes[neighbor_i].lock().unwrap();
+			
+			println!("Curr node: {} excess={} height={}, neighbor: {}, excess={}, height={}", curr_node_i, u.excess, u.height, v.i, v.excess, v.height);
 			
 			let can_push = u.height > v.height && direction * edge.flow < edge.capacity;
 			if can_push {
 				push(u, v, &mut edge, &mut excess, t);
-			} else {
-				println!("Relabelling node {} with height {}", curr_node_i, u.height);
-				relabel(u);
-				add_to_excess_list(u.i, &mut excess, t);
-			}
+			} 
+		}
+		
+		if u.excess > 0 {
+			relabel(u);
+			add_to_excess_list(u.i, &mut excess, t);
 		}
 	}
 
@@ -143,7 +153,7 @@ fn main() {
 }
 
 fn push(u: &mut Node, v: &mut Node, edge: &mut Edge, excess: &mut VecDeque<usize>, sink: usize) {
-	let mut delta = 0;
+	let delta;
 
 	if u.i == edge.u {
 		delta = min(u.excess, edge.capacity - edge.flow);
@@ -164,9 +174,6 @@ fn push(u: &mut Node, v: &mut Node, edge: &mut Edge, excess: &mut VecDeque<usize
 	assert!(u.excess >= 0);
 	assert!(edge.flow.abs() <= edge.capacity);
 
-
-	println!("u.excess {}", u.excess);
-	println!("v.excess {}", v.excess);
 	if u.excess > 0 {
 		add_to_excess_list(v.i, excess, sink);
 	}
@@ -177,14 +184,16 @@ fn push(u: &mut Node, v: &mut Node, edge: &mut Edge, excess: &mut VecDeque<usize
 }
 
 fn relabel(node: &mut Node) {
+	println!("Relabelling node {} with height {} to {}", node.i, node.height, node.height + 1);
 	if node.excess <= 0 {
-		panic!("You STUPID");
+		panic!("Error: Tried to relabel node {} with excess {}", node.i, node.excess);
 	}
 	node.height += 1;
 }
 
 fn add_to_excess_list(node_i: usize, excess: &mut VecDeque<usize>, t: usize) {
-	if node_i != t {
+	println!("Adding node {} to excess list", node_i);
+	if node_i != 0 && node_i != t {
 		excess.push_back(node_i);
 	}
 }

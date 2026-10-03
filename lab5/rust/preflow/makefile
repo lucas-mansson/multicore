@@ -1,6 +1,6 @@
 DATA		= ../../../data
-TEST    	= $(DATA)/railwayplanning/secret/0mini.in
-TEST_OUT 	= $(DATA)/railwayplanning/secret/0mini.ans 
+TEST    	= $(DATA)/railwayplanning/secret/2med.in 
+TEST_OUT    = $(DATA)/railwayplanning/secret/2med.out 
 
 
 all:
