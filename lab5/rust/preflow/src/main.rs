@@ -45,8 +45,8 @@ fn main() {
 	let s = 0;
 	let t = n-1;
 
-	println!("n = {}", n);
-	println!("m = {}", m);
+	//println!("n = {}", n);
+	// println!("m = {}", m);
 
 	for i in 0..n {
 		let u:Node = Node::new(i);
@@ -76,44 +76,57 @@ fn main() {
 		}
 	}
 
-	println!("initial pushes");
+	// println!("initial pushes");
 	let iter = adj[s].iter();
 	nodes[0].lock().unwrap().height = n as i32;
 
+	// println!("Number of source neighbors: {}", adj[s].len());
 	for &edge_idx in iter {
 		let mut edge = edges[edge_idx].lock().unwrap();
-		let neighbor_idx = edge.v;
+
+		let neighbor_i;
+		if 0 == edge.u {
+			neighbor_i = edge.v;
+		} else if 0 == edge.v {
+			neighbor_i = edge.u;
+		} else {
+			panic!("Illegal state");
+		}
 		let c = edge.capacity;
-	
+
 		let source = &mut nodes[s].lock().unwrap();
-		let neighbor = &mut nodes[neighbor_idx].lock().unwrap();
+
+		// println!("Curr index: {}", edge.u);
+		// println!("Neighbor index: {}", neighbor_i);
+		let neighbor = &mut nodes[neighbor_i].lock().unwrap();
 
 		edge.flow = c;
 		source.excess -= c;
 		neighbor.excess += c;
 
-		add_to_excess_list(neighbor_idx, &mut excess, t);
 
-		println!("Source with height {} pushing {} to node {}", source.height, c, neighbor_idx);
+		add_to_excess_list(neighbor_i, &mut excess, t);
+
+		// println!("Source with height {} pushing {} to node {}", source.height, c, neighbor_i);
 	}
 
 	while !excess.is_empty() {
 		let curr_node_i = excess.pop_front().unwrap();
-		println!("Got node {} from excess list", curr_node_i);
+		// println!("Got node {} from excess list", curr_node_i);
 
-		print!("Current excess list");
-		print!("[");
-		for i in &excess {
-			print!("{}, ", i);
-		}
-		print!("]\n");
+		// print!("Current excess list");
+		// print!("[");
+		// for i in &excess {
+			// print!("{}, ", i);
+		// }
+		// print!("]\n");
 
 		let u = &mut nodes[curr_node_i].lock().unwrap();
 		let iter = adj[curr_node_i].iter();
 		for &edge_idx in iter {
 		
 			if u.excess == 0 {
-				println!("{} has 0 excess, breaking", u.i);
+				// println!("{} has 0 excess, breaking", u.i);
 				break;
 			}
 
@@ -134,14 +147,14 @@ fn main() {
 
 			let v = &mut nodes[neighbor_i].lock().unwrap();
 			
-			println!("Curr node: {} excess={} height={}, neighbor: {}, excess={}, height={}", curr_node_i, u.excess, u.height, v.i, v.excess, v.height);
+			// println!("Curr node: {} excess={} height={}, neighbor: {}, excess={}, height={}", curr_node_i, u.excess, u.height, v.i, v.excess, v.height);
 			
 			let can_push = u.height > v.height && direction * edge.flow < edge.capacity;
 			if can_push {
 				push(u, v, &mut edge, &mut excess, t);
 			} 
 		}
-		
+
 		if u.excess > 0 {
 			relabel(u);
 			add_to_excess_list(u.i, &mut excess, t);
@@ -165,7 +178,7 @@ fn push(u: &mut Node, v: &mut Node, edge: &mut Edge, excess: &mut VecDeque<usize
 		panic!("Bruh");
 	}
 
-	println!("Pushing {} from {} (e={}) to {} (e={})", delta, u.i, u.excess, v.i, v.excess);
+	// println!("Pushing {} from {} (e={}) to {} (e={})", delta, u.i, u.excess, v.i, v.excess);
 
 	u.excess -= delta;
 	v.excess += delta;
@@ -184,7 +197,7 @@ fn push(u: &mut Node, v: &mut Node, edge: &mut Edge, excess: &mut VecDeque<usize
 }
 
 fn relabel(node: &mut Node) {
-	println!("Relabelling node {} with height {} to {}", node.i, node.height, node.height + 1);
+	// println!("Relabelling node {} with height {} to {}", node.i, node.height, node.height + 1);
 	if node.excess <= 0 {
 		panic!("Error: Tried to relabel node {} with excess {}", node.i, node.excess);
 	}
@@ -192,7 +205,7 @@ fn relabel(node: &mut Node) {
 }
 
 fn add_to_excess_list(node_i: usize, excess: &mut VecDeque<usize>, t: usize) {
-	println!("Adding node {} to excess list", node_i);
+	// println!("Adding node {} to excess list", node_i);
 	if node_i != 0 && node_i != t {
 		excess.push_back(node_i);
 	}

@@ -1,7 +1,11 @@
 DATA		= ../../../data
-TEST    	= $(DATA)/railwayplanning/secret/2med.in 
-TEST_OUT    = $(DATA)/railwayplanning/secret/2med.out 
 
+#TEST    	= $(DATA)/railwayplanning/secret/2med.in 
+#TESTCASE 	= $(DATA)/big/000
+TESTCASE 	= $(DATA)/big/002
+
+TEST    	= $(TESTCASE).in 
+TEST_OUT    = $(TESTCASE).out 
 
 all:
 	cargo run < $(DATA)/tiny/0.in | grep '^f = ' | sed 's/f = //' > out
