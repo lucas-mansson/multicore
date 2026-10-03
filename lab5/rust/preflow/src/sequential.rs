@@ -3,7 +3,7 @@
 use std::sync::{Mutex,Arc};
 use std::collections::LinkedList;
 use std::cmp::{self, min};
-use std::thread;
+//use std::thread;
 use std::collections::VecDeque;
 
 struct Node {
@@ -45,6 +45,9 @@ fn main() {
 	let s = 0;
 	let t = n-1;
 
+	//println!("n = {}", n);
+	// println!("m = {}", m);
+
 	for i in 0..n {
 		let u:Node = Node::new(i);
 		nodes.push(Arc::new(Mutex::new(u))); 
@@ -73,18 +76,18 @@ fn main() {
 		}
 	}
 
-	println!("initial pushes");
+	// println!("initial pushes");
 	let iter = adj[s].iter();
 	nodes[0].lock().unwrap().height = n as i32;
 
-	println!("Number of source neighbors: {}", adj[s].len());
+	// println!("Number of source neighbors: {}", adj[s].len());
 	for &edge_idx in iter {
 		let mut edge = edges[edge_idx].lock().unwrap();
 
 		let neighbor_i;
-		if edge.u == s {
+		if 0 == edge.u {
 			neighbor_i = edge.v;
-		} else if edge.v == s  {
+		} else if 0 == edge.v {
 			neighbor_i = edge.u;
 		} else {
 			panic!("Illegal state");
@@ -92,120 +95,79 @@ fn main() {
 		let c = edge.capacity;
 
 		let source = &mut nodes[s].lock().unwrap();
+
+		// println!("Curr index: {}", edge.u);
+		// println!("Neighbor index: {}", neighbor_i);
 		let neighbor = &mut nodes[neighbor_i].lock().unwrap();
 
 		edge.flow = c;
 		source.excess -= c;
 		neighbor.excess += c;
 
+
 		add_to_excess_list(neighbor_i, &mut excess, t);
+
+		// println!("Source with height {} pushing {} to node {}", source.height, c, neighbor_i);
 	}
 
-	let nbr_threads = 3;
-	let mut a = vec![];
+	while !excess.is_empty() {
+		let curr_node_i = excess.pop_front().unwrap();
+		// println!("Got node {} from excess list", curr_node_i);
 
-	let shared_adj = Arc::new(adj);
-	let shared_nodes = Arc::new(nodes);
-	let shared_edges = Arc::new(edges);
+		// print!("Current excess list");
+		// print!("[");
+		// for i in &excess {
+			// print!("{}, ", i);
+		// }
+		// print!("]\n");
 
-	for thread_i in 0..nbr_threads {
-		let thread_adj = Arc::clone(&shared_adj);
-		let thread_edges = Arc::clone(&shared_edges);
-		let thread_nodes = Arc::clone(&shared_nodes);
-
-		let h = thread::spawn(move || {
-			let mut i = thread_i;
-			let mut thread_nodes_indices = vec![];
-
-			while i < n {
-				thread_nodes_indices.push(i);
-				i += nbr_threads;
+		let u = &mut nodes[curr_node_i].lock().unwrap();
+		let iter = adj[curr_node_i].iter();
+		for &edge_idx in iter {
+		
+			if u.excess == 0 {
+				// println!("{} has 0 excess, breaking", u.i);
+				break;
 			}
 
-			loop {
-				let mut active_nodes: VecDeque<usize> = VecDeque::new();
-				for &i in &thread_nodes_indices {
-					if i == 0 || i == t {
-						continue;
-					}
+			let mut edge = edges[edge_idx].lock().unwrap();		
 
-					let curr_n = &thread_nodes[i].lock().unwrap();
-					if curr_n.excess > 0 {
-						active_nodes.push_back(i);
-					}
-				}
-
-				if active_nodes.is_empty() {
-					let source = thread_nodes[0].lock().unwrap();
-					let sink = thread_nodes[t].lock().unwrap();
-					// println!("sink excess: {}, source excess: {}", sink.excess, source.excess);
-					if -source.excess == sink.excess {
-						return;
-					}
-					continue;
-				}
-				
-				let curr_node_i = active_nodes.pop_front().unwrap();
-				//let u = &mut nodes[curr_node_i].lock().unwrap();
-
-				let iter = thread_adj[curr_node_i].iter();
-				for &edge_idx in iter {
-					let mut edge = thread_edges[edge_idx].lock().unwrap();	
-
-					let neighbor_i;
-					let direction;
-					if curr_node_i == edge.u {
-						neighbor_i = edge.v;
-						direction = 1;
-					} else if curr_node_i == edge.v {
-						neighbor_i = edge.u;
-						direction = -1;
-					} else {
-						panic!("illegal state");
-					}
-					assert!(direction == 1 || direction == -1);
-
-					let mut u;
-					let mut v;
-					
-					if curr_node_i < neighbor_i {
-						u = thread_nodes[curr_node_i].lock().unwrap();
-						v = thread_nodes[neighbor_i].lock().unwrap();
-					} else if neighbor_i < curr_node_i {
-						v = thread_nodes[neighbor_i].lock().unwrap();
-						u = thread_nodes[curr_node_i].lock().unwrap();
-					} else {
-						// println!("THREAD PANIC");
-						panic!("same node");
-					}
-
-					// println!("Curr node: {} excess={} height={}, neighbor: {}, excess={}, height={}", curr_node_i, u.excess, u.height, v.i, v.excess, v.height);
-
-					let can_push = u.height > v.height && direction * edge.flow < edge.capacity;
-					if can_push {
-						push(&mut u, &mut v, &mut edge);
-					} 
-				}
-
-				let mut u = thread_nodes[curr_node_i].lock().unwrap();
-				if u.excess > 0 {
-					relabel(&mut u);
-				}
+			let neighbor_i;
+			let direction;
+			if curr_node_i == edge.u {
+				neighbor_i = edge.v;
+				direction = 1;
+			} else if curr_node_i == edge.v {
+				neighbor_i = edge.u;
+				direction = -1;
+			} else {
+				panic!("Illegal state");
 			}
-		});
-		a.push(h);
+			assert!(direction == 1 || direction == -1);
+
+			let v = &mut nodes[neighbor_i].lock().unwrap();
+			
+			// println!("Curr node: {} excess={} height={}, neighbor: {}, excess={}, height={}", curr_node_i, u.excess, u.height, v.i, v.excess, v.height);
+			
+			let can_push = u.height > v.height && direction * edge.flow < edge.capacity;
+			if can_push {
+				push(u, v, &mut edge, &mut excess, t);
+			} 
+		}
+
+		if u.excess > 0 {
+			relabel(u);
+			add_to_excess_list(u.i, &mut excess, t);
+		}
 	}
 
-	for h in a {
-		h.join().unwrap();
-	}
-
-	println!("f = {}", shared_nodes[t].lock().unwrap().excess);
+	println!("f = {}", nodes[t].lock().unwrap().excess);
 
 }
 
-fn push(u: &mut Node, v: &mut Node, edge: &mut Edge) {
+fn push(u: &mut Node, v: &mut Node, edge: &mut Edge, excess: &mut VecDeque<usize>, sink: usize) {
 	let delta;
+
 	if u.i == edge.u {
 		delta = min(u.excess, edge.capacity - edge.flow);
 		edge.flow += delta;
@@ -225,6 +187,13 @@ fn push(u: &mut Node, v: &mut Node, edge: &mut Edge) {
 	assert!(u.excess >= 0);
 	assert!(edge.flow.abs() <= edge.capacity);
 
+	if u.excess > 0 {
+		add_to_excess_list(v.i, excess, sink);
+	}
+	// if v has delta flow, it previously had 0
+	if v.excess - delta == 0 {
+		add_to_excess_list(v.i, excess, sink);
+	}
 }
 
 fn relabel(node: &mut Node) {

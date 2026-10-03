@@ -1,8 +1,18 @@
 DATA		= ../../../data
 
-#TEST    	= $(DATA)/railwayplanning/secret/2med.in 
+
+#DATA = ../data/railwayplanning/secret/1small.in
+#DATA = ../data/railwayplanning/secret/2med.in
+#DATA = ../data/railwayplanning/secret/3large.in
+#DATA = ../data/railwayplanning/secret/4huge.in
+#DATA = ../data/tiny/0.in
+#DATA = ../data/big/002.in
+#DATA = ../data/huge/001.in
+
+TESTCASE = $(DATA)/tiny/0
+#TESTCASE    = $(DATA)/railwayplanning/secret/2med.in 
 #TESTCASE 	= $(DATA)/big/000
-TESTCASE 	= $(DATA)/big/002
+#TESTCASE 	= $(DATA)/big/002
 
 TEST    	= $(TESTCASE).in 
 TEST_OUT    = $(TESTCASE).out 
@@ -43,6 +53,8 @@ all:
 
 	@echo PASS all tests
 
+hg:
+	cargo build && valgrind --tool=helgrind ./target/debug/preflow < $(TEST)
 
 test:
 	cargo run < $(TEST) 
