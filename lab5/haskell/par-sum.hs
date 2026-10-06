@@ -30,14 +30,21 @@ seq_sum_primes(a, b) =
 	else	
 		seq_sum_primes(a, b-1)
 
-par_sum_primes:: (Int,Int)->Int
-par_sum_primes(a, b) =
-	let	m = a + (b-a) `div` 2
-		s1 = seq_sum_primes(a, m)
-		s2 = seq_sum_primes(m+1, b)
-	in
-		par s1 (pseq s2 (s1 + s2))
+par_sum_primes:: Int -> (Int,Int)->Int
+par_sum_primes nbr_threads (a, b) = split_range nbr_threads a b
 	
+split_range :: Int -> Int -> Int -> Int
+split_range k lo hi
+	| hi < lo  = 0
+	| k <= 1   = seq_sum_primes(lo, hi)
+	| otherwise =
+		let	mid   = lo + (hi - lo) `div` 2
+			half  = k `div` 2
+			left  = split_range half lo mid
+			right = split_range (k - half) (mid + 1) hi
+		in	par left (pseq right (left + right))
+
+
 main:: IO()
 main = do
 	line <- getLine
@@ -45,7 +52,7 @@ main = do
 	begin <- getCurrentTime
 
 	let	[n] = map read (words line) :: [Int]
-		s = par_sum_primes(2,n)
+		s = par_sum_primes 10 (2,n)
 
 	s `deepseq` do
 		end <- getCurrentTime
