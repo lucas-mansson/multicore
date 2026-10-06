@@ -1,3 +1,5 @@
+{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+{-# HLINT ignore "Use camelCase" #-}
 import Control.Parallel
 import Control.DeepSeq
 import Data.Time
@@ -24,7 +26,7 @@ seq_sum_primes:: (Int,Int)->Int
 seq_sum_primes(a, b) =
 	if a > b then 0
 	else if (is_prime(b)) then 	
-		1 + seq_sum_primes(a, b-1)
+		b + seq_sum_primes(a, b-1)
 	else	
 		seq_sum_primes(a, b-1)
 
