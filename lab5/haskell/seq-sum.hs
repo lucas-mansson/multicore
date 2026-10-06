@@ -1,3 +1,5 @@
+{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+{-# HLINT ignore "Use camelCase" #-}
 import Control.DeepSeq
 import Data.Time
 import Text.Printf (printf)
@@ -24,7 +26,7 @@ sum_prime(a, b)
 	| a > b = 0
 	| otherwise =
 		if (is_prime(b)) then 	
-			1 + sum_prime(a, b-1)
+			b + sum_prime(a, b-1)
 		else	
 			sum_prime(a, b-1)
 	
