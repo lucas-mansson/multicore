@@ -1,6 +1,6 @@
-require '[clojure.string :as str])		; for splitting an input line into words
+(require '[clojure.string :as str])		; for splitting an input line into words
 
-(def debug false)
+(def debug true)
 
 (defn prepend [list value] (cons value list))	; put value at the front of list
 
@@ -69,6 +69,16 @@ require '[clojure.string :as str])		; for splitting an input line into words
 	(let [f 	(edge-flow @(edges i))]
 	(let [c 	(edge-capacity @(edges i))]
 
+    ; (assert (> vh uh)) ; wtf är det+ta
+    (let [d (min c e)]
+		(println "Pushing " d)
+       	(move-excess nodes u v d)
+		(if (u-is-edge-u @(edges edge-index) u)
+			(increase-flow edges i d)
+			(decrease-flow edges i d)
+       	)
+	)
+	
 	(if debug
 		(do
 			(println "--------- push -------------------")
@@ -88,10 +98,14 @@ require '[clojure.string :as str])		; for splitting an input line into words
 	(if (not (empty? adj))
 		(do 
 			; give source this capacity as excess so the push will be accepted
-			(push (first adj) s nodes edges excess-nodes change s t)
+       		(let [i (first adj) c (edge-capacity @(edges i))]
+				(ref-set (nodes s) (update @(nodes s) :e + c))
+				(push i s nodes edges excess-nodes change s t)
+       		)
 			(initial-push (rest adj) s t nodes edges excess-nodes)))))
 
 (defn initial-pushes [nodes edges s t excess-nodes]
+	(println "Initial pushes")
 	(initial-push (node-adj @(nodes s)) s t nodes edges excess-nodes))
 
 (defn remove-any [excess-nodes]
@@ -125,8 +139,13 @@ require '[clojure.string :as str])		; for splitting an input line into words
 (dosync (read-graph 0 m nodes edges))
 
 (defn preflow []
-
 	(dosync (initial-pushes nodes edges s t excess-nodes))
+
+	(while (not (empty? @excess-nodes))
+		(let [u (remove-any excess-nodes)]
+			(println "u = " (u))
+		)
+	)
 
 	(println "f =" (node-excess @(nodes t))))
 
