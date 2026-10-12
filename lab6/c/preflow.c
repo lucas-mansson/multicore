@@ -329,7 +329,9 @@ void phase_1(node_t *u, node_t *v, edge_t *edge, list_t *p, work_t *work,
 
     if (flow_direction * edge->flow < edge->capacity) {
       // int h = atomic_load_explicit(&v->height, MEMORY_ORDER);
-      int h = v->height;
+      int h = -1;
+      __transaction_atomic { h = v->height; }
+      assert(h != -1);
       if (h < min_height) {
         min_height = h;
       }
@@ -356,7 +358,7 @@ void phase_1(node_t *u, node_t *v, edge_t *edge, list_t *p, work_t *work,
     // work->newHeight = min_height + 1;
 
     // atomic_store_explicit(&u->height, min_height + 1, MEMORY_ORDER);
-    u->height = min_height + 1;
+    __transaction_atomic { u->height = min_height + 1; }
   }
 }
 
