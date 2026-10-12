@@ -1,6 +1,6 @@
 (require '[clojure.string :as str])		; for splitting an input line into words
 
-(def debug true)
+(def debug false)
 
 (defn prepend [list value] (cons value list))	; put value at the front of list
 
@@ -69,16 +69,36 @@
 	(let [f 	(edge-flow @(edges i))]
 	(let [c 	(edge-capacity @(edges i))]
 
-    ; (assert (> vh uh)) ; wtf är det+ta
-    (let [d (min c e)]
-		(println "Pushing " d)
-       	(move-excess nodes u v d)
-		(if (u-is-edge-u @(edges edge-index) u)
-			(increase-flow edges i d)
-			(decrease-flow edges i d)
-       	)
-	)
+    ; if u_height > v_height and u != t and e != 0
+    (if (and (> uh vh) (not= u t) (not= e 0))
+		(let [residual (if (u-is-edge-u @(edges i) u)
+                (- c f)
+                (+ c f))]
 	
+      	(let [d (min residual e)]
+			(if debug (println "Pushing"))
+			(if (> d 0)
+				(do
+					(ref-set change 1)
+					(if debug (println "Pushing " d))
+					(move-excess nodes u v d)
+					(if (u-is-edge-u @(edges edge-index) u)
+						(increase-flow edges i d)
+						(decrease-flow edges i d)
+					)
+				
+					(if (> (node-excess @(nodes u)) 0)
+						(check-insert excess-nodes u s t)
+					)
+					(if (= (node-excess @(nodes v)) d)
+						(check-insert excess-nodes v s t)
+					)
+             	)
+			)
+    	)
+		)
+	)
+       
 	(if debug
 		(do
 			(println "--------- push -------------------")
@@ -89,7 +109,8 @@
 			(println "f = " f)
 			(println "c = " c)
 			(println "v = " v)
-			(println "vh = " vh)))))))))))
+			(println "vh = " vh))))))))))
+)
 
 
 ; go through adjacency-list of source and push
@@ -98,10 +119,11 @@
 	(if (not (empty? adj))
 		(do 
 			; give source this capacity as excess so the push will be accepted
-       		(let [i (first adj) c (edge-capacity @(edges i))]
+       		(let [i (first adj)]  
+          	(let [c (edge-capacity @(edges i))]
 				(ref-set (nodes s) (update @(nodes s) :e + c))
 				(push i s nodes edges excess-nodes change s t)
-       		)
+       		))
 			(initial-push (rest adj) s t nodes edges excess-nodes)))))
 
 (defn initial-pushes [nodes edges s t excess-nodes]
@@ -143,7 +165,32 @@
 
 	(while (not (empty? @excess-nodes))
 		(let [u (remove-any excess-nodes)]
-			(println "u = " (u))
+		(let [change (ref 0)]
+			; try to push, change indicates whether a push could be done
+			(doseq [i (node-adj @(nodes u))]
+				(dosync
+					(push i u nodes edges excess-nodes change s t)
+					(if debug
+						(println "change " @change)
+        			)
+				)
+ 		       	(if debug
+					(println "Current excess list " @excess-nodes)		
+        		)
+			)
+			; if not push could be done, we need to relabel
+			(if (and (= @change 0) (not= (node-excess @(nodes u)) 0))
+				(do 
+					(if debug
+						(println "No change, relabelling")
+         			)
+					(dosync
+						(ref-set (nodes u) (update @(nodes u) :h + 1))
+						(check-insert excess-nodes u s t)
+        			)
+          		)
+        	)
+		)
 		)
 	)
 
