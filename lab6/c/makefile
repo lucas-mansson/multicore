@@ -1,5 +1,6 @@
+DATA_PREFIX = ../../data
 #DATA = ../data/railwayplanning/secret/3large.in
-DATA = ../data/railwayplanning/secret/4huge.in
+DATA = $(DATA_PREFIX)/railwayplanning/secret/4huge.in
 #DATA = ../data/big/002.in
 #DATA = ../data/tiny/0.in
 #DATA = ../data/railwayplanning/secret/1small.in

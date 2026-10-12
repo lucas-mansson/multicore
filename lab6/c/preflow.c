@@ -3,7 +3,6 @@
 #include <ctype.h>
 #include <pthread.h>
 #include <stdarg.h>
-#include <stdatomic.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdio.h>
@@ -37,10 +36,10 @@ struct list_t {
 };
 
 struct node_t {
-  atomic_int height; /* height.			*/
-  int excess;        /* excess flow.			*/
-  list_t *adj;       /* adjacency list.		*/
-  node_t *next;      /* with excess preflow.		*/
+  int height;   /* height.			*/
+  int excess;   /* excess flow.			*/
+  list_t *adj;  /* adjacency list.		*/
+  node_t *next; /* with excess preflow.		*/
 };
 
 struct edge_t {
@@ -329,8 +328,8 @@ void phase_1(node_t *u, node_t *v, edge_t *edge, list_t *p, work_t *work,
     }
 
     if (flow_direction * edge->flow < edge->capacity) {
-      // min_height = v->height;
-      int h = atomic_load_explicit(&v->height, MEMORY_ORDER);
+      // int h = atomic_load_explicit(&v->height, MEMORY_ORDER);
+      int h = v->height;
       if (h < min_height) {
         min_height = h;
       }
@@ -356,8 +355,8 @@ void phase_1(node_t *u, node_t *v, edge_t *edge, list_t *p, work_t *work,
     work->relabel = true;
     // work->newHeight = min_height + 1;
 
-    // u->height = min_height + 1;
-    atomic_store_explicit(&u->height, min_height + 1, MEMORY_ORDER);
+    // atomic_store_explicit(&u->height, min_height + 1, MEMORY_ORDER);
+    u->height = min_height + 1;
   }
 }
 
