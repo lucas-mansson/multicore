@@ -178,12 +178,13 @@
 						)
 					)
 					; if not push could be done, we need to relabel
-					(if (and (= @change 0) (not= (node-excess @(nodes u)) 0))
-						(do 
-							(if debug
-								(println "No change, relabelling")
-							)
-							(dosync
+					(dosync
+						(if (and (= @change 0) (not= (node-excess @(nodes u)) 0))
+							(do 
+								(if debug
+									(println "No change, relabelling")
+								)
+		
 								(ref-set (nodes u) (update @(nodes u) :h + 1))
 								(check-insert excess-nodes u s t)
 							)
