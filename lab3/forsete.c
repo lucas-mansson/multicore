@@ -9,7 +9,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define TIME 0  /* for timing on power.		*/
+#define TIME 1  /* for timing on power.		*/
 #define PRINT 0
 #if PRINT
 #define pr(...)                                                                \
