@@ -9,6 +9,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#define TIME 0  /* for timing on power.		*/
 #define PRINT 0
 #if PRINT
 #define pr(...)                                                                \
@@ -22,6 +23,15 @@
 #define MIN(a, b) (((a) <= (b)) ? (a) : (b))
 
 #define NBR_THREADS 12
+
+typedef struct xedge_t xedge_t;
+
+struct xedge_t {
+  int u; /* one of the two nodes.	*/
+  int v; /* the other. 			*/
+  int c; /* capacity.			*/
+};
+
 
 typedef struct graph_t graph_t;
 typedef struct node_t node_t;
@@ -78,17 +88,6 @@ void error(const char *fmt, ...) {
 
   fprintf(stderr, "error: %s\n", buf);
   exit(1);
-}
-
-static int next_int() {
-  int x;
-  int c;
-
-  x = 0;
-  while (isdigit(c = getchar()))
-    x = 10 * x + c - '0';
-
-  return x;
 }
 
 static void *xmalloc(size_t s) {
@@ -173,7 +172,7 @@ static node_t *other(node_t *u, edge_t *e) {
     return e->node_1;
 }
 
-static graph_t *new_graph(FILE *in, int n, int m) {
+static graph_t *new_graph(int n, int m, int s, int t, xedge_t *e) {
   graph_t *g;
   node_t *u;
   node_t *v;
@@ -195,9 +194,9 @@ static graph_t *new_graph(FILE *in, int n, int m) {
   g->excess_nodes = NULL;
 
   for (i = 0; i < m; i += 1) {
-    a = next_int();
-    b = next_int();
-    c = next_int();
+    a = e[i].u;
+    b = e[i].v;
+    c = e[i].c;
     u = &g->nodes[a];
     v = &g->nodes[b];
     connect(u, v, c, g->edges + i);
@@ -435,7 +434,7 @@ void *work(void *arg) {
   return NULL;
 }
 
-int preflow(graph_t *graph) {
+int xpreflow(graph_t *graph) {
   node_t *source;
   node_t *u;
   node_t *v;
@@ -484,7 +483,7 @@ int preflow(graph_t *graph) {
   struct work_args_t thread_arg[nbr_threads];
   
   for (int i = 0; i < nbr_threads; i++) {
-    printf("Creating thread %d \n", i);
+    pr("Creating thread %d \n", i);
     work_list[i] = xmalloc(graph->nbr_nodes * sizeof(work_t));
     thread_arg[i] =(struct work_args_t) {graph, work_list, work_counts, i}; // if i dont do this all the threads get the same id.
     if (pthread_create(&thread[i], NULL, work, &thread_arg[i]) != 0) {
@@ -498,11 +497,33 @@ int preflow(graph_t *graph) {
       error("pthread join failed");
     }
     free(work_list[i]);
-    printf("Destroying thread %d \n", i);
+    pr("Destroying thread %d \n", i);
   }
 
   return graph->sink->excess;
 }
+
+static void free_graph(graph_t *g);
+
+int preflow(int n, int m, int s, int t, xedge_t *e){
+    graph_t *g;
+    int f;
+    double begin;
+    double end;
+
+  #if TIME
+    init_timebase();
+    begin = timebase_sec();
+  #endif
+    g = new_graph(n, m, s, t, e);
+    f = xpreflow(g);
+    free_graph(g);
+  #if TIME
+    end = timebase_sec();
+    printf("t = %10.3lf s\n", end - begin);
+  #endif
+    return f;
+  }
 
 static void free_graph(graph_t *g) {
   int i;
@@ -520,35 +541,4 @@ static void free_graph(graph_t *g) {
   free(g->nodes);
   free(g->edges);
   free(g);
-}
-
-int main(int argc, char *argv[]) {
-  FILE *in;   /* input file set to stdin	*/
-  graph_t *g; /* undirected graph. 		*/
-  int f;      /* output from preflow.		*/
-  int n;      /* number of nodes.		*/
-  int m;      /* number of edges.		*/
-
-  progname = argv[0]; /* name is a string in argv[0]. */
-
-  in = stdin; /* same as System.in in Java.	*/
-
-  n = next_int();
-  m = next_int();
-
-  /* skip C and P from the 6railwayplanning lab in EDAF05 */
-  next_int();
-  next_int();
-
-  g = new_graph(in, n, m);
-
-  fclose(in);
-
-  f = preflow(g);
-
-  printf("f = %d\n", f);
-
-  free_graph(g);
-
-  return 0;
 }
