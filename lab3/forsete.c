@@ -231,10 +231,10 @@ static void push(graph_t *graph, node_t *from, node_t *to, edge_t *edge,
   pr("f = %d, c = %d, so ", edge->flow, edge->capacity);
 
   if (from == edge->node_1) {
-    amount = MIN(from->excess, edge->capacity - edge->flow);
+    // amount = MIN(from->excess, edge->capacity - edge->flow);
     edge->flow += amount;
   } else {
-    amount = MIN(from->excess, edge->capacity + edge->flow);
+    // amount = MIN(from->excess, edge->capacity + edge->flow);
     edge->flow -= amount;
   }
 
@@ -332,6 +332,14 @@ static void phase_1(node_t *u, node_t *v, edge_t *edge, list_t *p, work_t *work,
     work->edge = edge;
     work->relabel = false;
     work->amount = 0;
+
+    if (u == edge->node_1) {
+      work->amount = MIN(u->excess, edge->capacity - edge->flow);
+      // edge->flow += amount;
+    } else {
+      work->amount = MIN(u->excess, edge->capacity + edge->flow);
+      // edge->flow -= amount;
+    }
   } else {
     // Should relabel
     work->neighbor = NULL;
