@@ -45,7 +45,7 @@ struct list_t {
 };
 
 struct node_t {
-  int height;   /* height.			*/
+  atomic_int height;   /* height.			*/
   int excess;   /* excess flow.			*/
   list_t *adj;  /* adjacency list.		*/
   node_t *next; /* with excess preflow.		*/
@@ -338,6 +338,7 @@ static void phase_1(node_t *u, node_t *v, edge_t *edge, list_t *p, work_t *work,
     work->edge = NULL;
     work->relabel = true;
     work->newHeight = min_height + 1;
+    atomic_store_explicit(&u->height, min_height + 1, memory_order_relaxed);
   }
 }
 
@@ -350,7 +351,6 @@ static void phase_2(work_t **work_list, size_t *work_counts, graph_t *graph) {
       work_t *work = &work_list[i][j];
       if (work->relabel == true) {
         pr("SHOULD RELABEL\n");
-        work->curr_node->height = work->newHeight;
         add_to_excess_list(graph, work->curr_node);
           
       } else {
@@ -430,8 +430,8 @@ static int xpreflow(graph_t *graph) {
 
 
   source = graph->source;
-  source->height = graph->nbr_nodes;
-  
+  atomic_store_explicit(&source->height, graph->nbr_nodes, memory_order_relaxed);
+
   p = source->adj;
   graph->top_of_ex=0;
   graph->max_ex = 2 * graph->nbr_nodes;
