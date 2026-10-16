@@ -224,24 +224,24 @@ static void add_to_excess_list(graph_t *g, node_t *v) {
   }
 }
 
-static void push(graph_t *graph, node_t *from, node_t *to, edge_t *edge) {
-  int remaining_capacity; /* remaining capacity of the edge. */
+static void push(graph_t *graph, node_t *from, node_t *to, edge_t *edge,
+                 int amount) {
 
   pr("push from %d to %d: ", id(graph, from), id(graph, to));
   pr("f = %d, c = %d, so ", edge->flow, edge->capacity);
 
   if (from == edge->node_1) {
-    remaining_capacity = MIN(from->excess, edge->capacity - edge->flow);
-    edge->flow += remaining_capacity;
+    amount = MIN(from->excess, edge->capacity - edge->flow);
+    edge->flow += amount;
   } else {
-    remaining_capacity = MIN(from->excess, edge->capacity + edge->flow);
-    edge->flow -= remaining_capacity;
+    amount = MIN(from->excess, edge->capacity + edge->flow);
+    edge->flow -= amount;
   }
 
-  pr("pushing %d\n", remaining_capacity);
+  pr("pushing %d\n", amount);
 
-  from->excess -= remaining_capacity;
-  to->excess += remaining_capacity;
+  from->excess -= amount;
+  to->excess += amount;
 
   /* the following are always true. */
   // assert(remaining_capacity >= 0);
@@ -253,7 +253,7 @@ static void push(graph_t *graph, node_t *from, node_t *to, edge_t *edge) {
     add_to_excess_list(graph, from);
   }
 
-  if (to->excess == remaining_capacity) {
+  if (to->excess == amount) {
     /* since v has d excess now it had zero before and
      * can now push.
      */
@@ -287,7 +287,7 @@ struct work_t {
   node_t *curr_node;
   node_t *neighbor;
   edge_t *edge;
-  // int amount;
+  int amount;
   bool relabel;
   int newHeight;
 };
@@ -331,6 +331,7 @@ static void phase_1(node_t *u, node_t *v, edge_t *edge, list_t *p, work_t *work,
     work->neighbor = v;
     work->edge = edge;
     work->relabel = false;
+    work->amount = 0;
   } else {
     // Should relabel
     work->neighbor = NULL;
@@ -354,7 +355,7 @@ static void phase_2(work_t **work_list, size_t *work_counts, graph_t *graph) {
 
       } else {
         pr("SHOULD PUSH\n");
-        push(graph, work->curr_node, work->neighbor, work->edge);
+        push(graph, work->curr_node, work->neighbor, work->edge, work->amount);
       }
     }
     work_counts[i] = 0;
