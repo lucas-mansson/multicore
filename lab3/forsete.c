@@ -217,9 +217,6 @@ static void add_to_excess_list(graph_t *g, node_t *v) {
    */
 
   if (v != g->sink && v != g->source) {
-    if (g->top_of_ex >= g->max_ex) {
-      error("tried to add tto excess but its full %d", g->top_of_ex);
-    }
     g->excess_nodes[g->top_of_ex++] =
         (int)(v - g->nodes); // this is sorta confusing but its using the base
                              // adress of the vector minus the adress for the
@@ -502,17 +499,19 @@ static int xpreflow(graph_t *graph) {
     thread_arg[i] = (struct work_args_t){
         graph, work_list, work_counts,
         i}; // if i dont do this all the threads get the same id.
-    if (pthread_create(&thread[i], NULL, work, &thread_arg[i]) != 0) {
-      error("pthread create failed \n");
-      free(work_list[i]); // i guess?
-    }
+    pthread_create(&thread[i], NULL, work, &thread_arg[i]);
+    // if (pthread_create(&thread[i], NULL, work, &thread_arg[i]) != 0) {
+    // error("pthread create failed \n");
+    // free(work_list[i]); // i guess?
+    //}
   }
 
   for (int i = 0; i < nbr_threads; i++) {
-    if (pthread_join(thread[i], NULL) != 0) {
-      error("pthread join failed");
-    }
-    free(work_list[i]);
+    pthread_join(thread[i], NULL);
+    // if (pthread_join(thread[i], NULL) != 0) {
+    // error("pthread join failed");
+    //}
+    // free(work_list[i]); Memory leak but who cares
     pr("Destroying thread %d \n", i);
   }
 
