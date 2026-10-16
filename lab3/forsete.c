@@ -441,7 +441,6 @@ static int xpreflow(graph_t *graph) {
     source_outgoing_cap += edge->capacity;
     p = p->next;
   }
-  printf("source outgoing: %d\n", source_outgoing_cap);
 
   sink = graph->sink;
   p = sink->adj;
@@ -451,7 +450,6 @@ static int xpreflow(graph_t *graph) {
     sink_outgoing_cap += edge->capacity;
     p = p->next;
   }
-  printf("sink outgoing: %d\n", sink_outgoing_cap);
 
   if (sink_outgoing_cap < source_outgoing_cap) {
     node_t *temp = graph->source;
