@@ -6,8 +6,8 @@
 DATA = ../data/huge/001.in
 
 main:
-	gcc -o preflow preflow.c -O3 -pthread
-	time sh check-solution.sh ./preflow
+	gcc driver.c forsete.c -o driver  -O3 -pthread
+	time sh check-solution.sh ./driver
 	@echo PASS all tests
 
 test: 
