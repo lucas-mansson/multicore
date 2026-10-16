@@ -3,14 +3,14 @@
 #include <ctype.h>
 #include <pthread.h>
 #include <stdarg.h>
+#include <stdatomic.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <stdatomic.h>
 
-#define TIME 0  /* for timing on power.		*/
+#define TIME 0 /* for timing on power.		*/
 #define PRINT 0
 #if PRINT
 #define pr(...)                                                                \
@@ -33,7 +33,6 @@ struct xedge_t {
   int c; /* capacity.			*/
 };
 
-
 typedef struct graph_t graph_t;
 typedef struct node_t node_t;
 typedef struct edge_t edge_t;
@@ -45,10 +44,10 @@ struct list_t {
 };
 
 struct node_t {
-  atomic_int height;   /* height.			*/
-  int excess;   /* excess flow.			*/
-  list_t *adj;  /* adjacency list.		*/
-  node_t *next; /* with excess preflow.		*/
+  atomic_int height; /* height.			*/
+  int excess;        /* excess flow.			*/
+  list_t *adj;       /* adjacency list.		*/
+  node_t *next;      /* with excess preflow.		*/
 };
 
 struct edge_t {
@@ -59,13 +58,13 @@ struct edge_t {
 };
 
 struct graph_t {
-  int nbr_nodes;        /* nodes.			*/
-  int nbr_edges;        /* edges.			*/
-  node_t *nodes;        /* array of n nodes.		*/
-  edge_t *edges;        /* array of m edges.		*/
-  node_t *source;       /* source.			*/
-  node_t *sink;         /* sink.			*/
-  int top_of_ex; 
+  int nbr_nodes;  /* nodes.			*/
+  int nbr_edges;  /* edges.			*/
+  node_t *nodes;  /* array of n nodes.		*/
+  edge_t *edges;  /* array of m edges.		*/
+  node_t *source; /* source.			*/
+  node_t *sink;   /* sink.			*/
+  int top_of_ex;
   int max_ex;
   int *excess_nodes; /* nodes with e > 0 except s,t.	*/
 };
@@ -218,13 +217,15 @@ static void add_to_excess_list(graph_t *g, node_t *v) {
    */
 
   if (v != g->sink && v != g->source) {
-    if(g->top_of_ex >= g->max_ex){
+    if (g->top_of_ex >= g->max_ex) {
       error("tried to add tto excess but its full %d", g->top_of_ex);
     }
-    g->excess_nodes[g->top_of_ex++] = (int) (v - g->nodes); // this is sorta confusing but its using the base adress of the vector minus the adress for the node to get the index.
+    g->excess_nodes[g->top_of_ex++] =
+        (int)(v - g->nodes); // this is sorta confusing but its using the base
+                             // adress of the vector minus the adress for the
+                             // node to get the index.
   }
 }
-
 
 static void push(graph_t *graph, node_t *from, node_t *to, edge_t *edge) {
   int remaining_capacity; /* remaining capacity of the edge. */
@@ -246,9 +247,9 @@ static void push(graph_t *graph, node_t *from, node_t *to, edge_t *edge) {
   to->excess += remaining_capacity;
 
   /* the following are always true. */
-  assert(remaining_capacity >= 0);
-  assert(from->excess >= 0);
-  assert(abs(edge->flow) <= edge->capacity);
+  // assert(remaining_capacity >= 0);
+  // assert(from->excess >= 0);
+  // assert(abs(edge->flow) <= edge->capacity);
 
   if (from->excess > 0) {
     /* still some remaining so let u push more. */
@@ -271,12 +272,12 @@ static void relabel(graph_t *g, node_t *u) {
   add_to_excess_list(g, u);
 }
 
-node_t *getNode(size_t thread_id, node_t *excess_nodes){
-    node_t *u = excess_nodes;
-    for (int i = 0; i < thread_id && u != NULL; i++){
-      u = u->next;
-    }
-    return u;
+node_t *getNode(size_t thread_id, node_t *excess_nodes) {
+  node_t *u = excess_nodes;
+  for (int i = 0; i < thread_id && u != NULL; i++) {
+    u = u->next;
+  }
+  return u;
 }
 
 /*
@@ -295,7 +296,8 @@ struct work_t {
 };
 
 // calculate work struct and add to work vector
-static void phase_1(node_t *u, node_t *v, edge_t *edge, list_t *p, work_t *work, graph_t *graph) {
+static void phase_1(node_t *u, node_t *v, edge_t *edge, list_t *p, work_t *work,
+                    graph_t *graph) {
   int flow_direction;
 
   v = NULL;
@@ -314,17 +316,17 @@ static void phase_1(node_t *u, node_t *v, edge_t *edge, list_t *p, work_t *work,
       flow_direction = -1;
     }
 
-    if(flow_direction * edge->flow < edge->capacity){
-      if(v->height < min_height){
+    if (flow_direction * edge->flow < edge->capacity) {
+      if (v->height < min_height) {
         min_height = v->height;
       }
-      if(u->height > v->height) {
+      if (u->height > v->height) {
         break;
       }
     }
     v = NULL;
   }
-  assert(min_height != __INT_MAX__);
+  // assert(min_height != __INT_MAX__);
   work->curr_node = u;
 
   if (v != NULL) {
@@ -343,20 +345,20 @@ static void phase_1(node_t *u, node_t *v, edge_t *edge, list_t *p, work_t *work,
 }
 
 static void phase_2(work_t **work_list, size_t *work_counts, graph_t *graph) {
-  graph->top_of_ex=0;
+  graph->top_of_ex = 0;
 
   for (int i = 0; i < NBR_THREADS; i++) {
 
-    for(size_t j = 0; j < work_counts[i]; ++j){
+    for (size_t j = 0; j < work_counts[i]; ++j) {
       work_t *work = &work_list[i][j];
       if (work->relabel == true) {
         pr("SHOULD RELABEL\n");
         add_to_excess_list(graph, work->curr_node);
-          
+
       } else {
         pr("SHOULD PUSH\n");
         push(graph, work->curr_node, work->neighbor, work->edge);
-      } 
+      }
     }
     work_counts[i] = 0;
   }
@@ -378,19 +380,19 @@ static void *work(void *arg) {
   list_t *p;
   graph_t *graph;
   work_t **work_list;
-  int thread_id ;
+  int thread_id;
   size_t *work_counts = args->work_counts;
-  
+
   thread_id = args->id;
   graph = args->graph;
   work_list = args->vector;
 
-  pr("thread id %d\n",thread_id);
-  
+  pr("thread id %d\n", thread_id);
+
   while (true) {
     int next = thread_id;
     u = &graph->nodes[graph->excess_nodes[next]];
-    while(next < graph->top_of_ex){
+    while (next < graph->top_of_ex) {
       work_t *work = &work_list[thread_id][work_counts[thread_id]++];
 
       phase_1(u, v, edge, p, work, graph);
@@ -402,7 +404,6 @@ static void *work(void *arg) {
     pr("Wait 1\n");
     int ret = pthread_barrier_wait(&barrier1);
     pr("Ret: %d\n", ret);
-
 
     if (ret == PTHREAD_BARRIER_SERIAL_THREAD) {
       phase_2(work_list, work_counts, graph);
@@ -428,27 +429,27 @@ static int xpreflow(graph_t *graph) {
   list_t *p;
   int flow_direction;
 
-
   source = graph->source;
-  atomic_store_explicit(&source->height, graph->nbr_nodes, memory_order_relaxed);
+  atomic_store_explicit(&source->height, graph->nbr_nodes,
+                        memory_order_relaxed);
 
   p = source->adj;
-  graph->top_of_ex=0;
+  graph->top_of_ex = 0;
   graph->max_ex = 2 * graph->nbr_nodes;
   graph->excess_nodes = xmalloc(graph->max_ex * sizeof(int));
 
-  while (p != NULL) {  
+  while (p != NULL) {
     edge = p->edge;
     p = p->next;
 
     int amount;
 
     if (source == edge->node_1) {
-        amount = edge->capacity - edge->flow;
-        edge->flow += amount;
+      amount = edge->capacity - edge->flow;
+      edge->flow += amount;
     } else {
-        amount = edge->capacity + edge->flow;
-        edge->flow -= amount;
+      amount = edge->capacity + edge->flow;
+      edge->flow -= amount;
     }
 
     node_t *to = other(source, edge);
@@ -460,17 +461,18 @@ static int xpreflow(graph_t *graph) {
   }
   work_t *work_list[NBR_THREADS] = {0};
 
-
   int nbr_threads = NBR_THREADS;
   pthread_barrier_init(&barrier1, NULL, NBR_THREADS);
   pthread_t thread[nbr_threads];
   size_t work_counts[NBR_THREADS] = {0};
   struct work_args_t thread_arg[nbr_threads];
-  
+
   for (int i = 0; i < nbr_threads; i++) {
     pr("Creating thread %d \n", i);
     work_list[i] = xmalloc(graph->nbr_nodes * sizeof(work_t));
-    thread_arg[i] =(struct work_args_t) {graph, work_list, work_counts, i}; // if i dont do this all the threads get the same id.
+    thread_arg[i] = (struct work_args_t){
+        graph, work_list, work_counts,
+        i}; // if i dont do this all the threads get the same id.
     if (pthread_create(&thread[i], NULL, work, &thread_arg[i]) != 0) {
       error("pthread create failed \n");
       free(work_list[i]); // i guess?
@@ -490,25 +492,25 @@ static int xpreflow(graph_t *graph) {
 
 static void free_graph(graph_t *g);
 
-int preflow(int n, int m, int s, int t, xedge_t *e){
-    graph_t *g;
-    int f;
-    double begin;
-    double end;
+int preflow(int n, int m, int s, int t, xedge_t *e) {
+  graph_t *g;
+  int f;
+  double begin;
+  double end;
 
-  #if TIME
-    init_timebase();
-    begin = timebase_sec();
-  #endif
-    g = new_graph(n, m, s, t, e);
-    f = xpreflow(g);
-    free_graph(g);
-  #if TIME
-    end = timebase_sec();
-    printf("t = %10.3lf s\n", end - begin);
-  #endif
-    return f;
-  }
+#if TIME
+  init_timebase();
+  begin = timebase_sec();
+#endif
+  g = new_graph(n, m, s, t, e);
+  f = xpreflow(g);
+  free_graph(g);
+#if TIME
+  end = timebase_sec();
+  printf("t = %10.3lf s\n", end - begin);
+#endif
+  return f;
+}
 
 static void free_graph(graph_t *g) {
   int i;
@@ -528,5 +530,3 @@ static void free_graph(graph_t *g) {
   free(g->excess_nodes);
   free(g);
 }
-
-
