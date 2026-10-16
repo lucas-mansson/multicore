@@ -188,8 +188,8 @@ static graph_t *new_graph(int n, int m, int s, int t, xedge_t *e) {
   g->nbr_nodes = n;
   g->nbr_edges = m;
 
-  g->nodes = xcalloc(n, sizeof(node_t));
-  g->edges = xcalloc(m, sizeof(edge_t));
+  g->nodes = calloc(n, sizeof(node_t));
+  g->edges = calloc(m, sizeof(edge_t));
 
   g->source = &g->nodes[0];
   g->sink = &g->nodes[n - 1];
@@ -423,6 +423,7 @@ static void *work(void *arg) {
 
 static int xpreflow(graph_t *graph) {
   node_t *source;
+  node_t *sink;
   node_t *u;
   node_t *v;
   edge_t *edge;
@@ -430,6 +431,36 @@ static int xpreflow(graph_t *graph) {
   int flow_direction;
 
   source = graph->source;
+  sink = graph->sink;
+
+  // calculate source outgoing capacity
+  p = source->adj;
+  int source_outgoing_cap = 0;
+  while (p != NULL) {
+    edge = p->edge;
+    source_outgoing_cap += edge->capacity;
+    p = p->next;
+  }
+  printf("source outgoing: %d\n", source_outgoing_cap);
+
+  sink = graph->sink;
+  p = sink->adj;
+  int sink_outgoing_cap = 0;
+  while (p != NULL) {
+    edge = p->edge;
+    sink_outgoing_cap += edge->capacity;
+    p = p->next;
+  }
+  printf("sink outgoing: %d\n", sink_outgoing_cap);
+
+  if (sink_outgoing_cap < source_outgoing_cap) {
+    node_t *temp = graph->source;
+    graph->source = graph->sink;
+    graph->sink = temp;
+  }
+
+  source = graph->source;
+  sink = graph->sink;
   atomic_store_explicit(&source->height, graph->nbr_nodes,
                         memory_order_relaxed);
 
