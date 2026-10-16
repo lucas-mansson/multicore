@@ -147,7 +147,7 @@ static void add_edge(node_t *u, edge_t *e) {
    *
    */
 
-  p = xmalloc(sizeof(list_t));
+  p = malloc(sizeof(list_t));
   p->edge = e;
   p->next = u->adj;
   u->adj = p;
@@ -183,7 +183,7 @@ static graph_t *new_graph(int n, int m, int s, int t, xedge_t *e) {
   int b;
   int c;
 
-  g = xmalloc(sizeof(graph_t));
+  g = malloc(sizeof(graph_t));
 
   g->nbr_nodes = n;
   g->nbr_edges = m;
@@ -436,7 +436,7 @@ static int xpreflow(graph_t *graph) {
   p = source->adj;
   graph->top_of_ex = 0;
   graph->max_ex = 2 * graph->nbr_nodes;
-  graph->excess_nodes = xmalloc(graph->max_ex * sizeof(int));
+  graph->excess_nodes = malloc(graph->max_ex * sizeof(int));
 
   while (p != NULL) {
     edge = p->edge;
@@ -469,7 +469,7 @@ static int xpreflow(graph_t *graph) {
 
   for (int i = 0; i < nbr_threads; i++) {
     pr("Creating thread %d \n", i);
-    work_list[i] = xmalloc(graph->nbr_nodes * sizeof(work_t));
+    work_list[i] = malloc(graph->nbr_nodes * sizeof(work_t));
     thread_arg[i] = (struct work_args_t){
         graph, work_list, work_counts,
         i}; // if i dont do this all the threads get the same id.
