@@ -397,13 +397,12 @@ static void *work(void *arg) {
 
   while (true) {
     int next = thread_id;
-    u = &graph->nodes[graph->excess_nodes[next]];
     while (next < graph->top_of_ex) {
+      u = &graph->nodes[graph->excess_nodes[next]];
       work_t *work = &work_list[thread_id][work_counts[thread_id]++];
 
       phase_1(u, v, edge, p, work, graph);
       next += NBR_THREADS;
-      u = &graph->nodes[graph->excess_nodes[next]];
     }
 
     // All threads wait here
